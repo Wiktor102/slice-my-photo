@@ -3,7 +3,7 @@ import { Layer, Line, Rect, Stage, Text, Image as KonvaImage, Group } from 'reac
 import type Konva from 'konva'
 import { useStore, useImagePlacement } from '../store/useStore'
 import { loadImage } from '../lib/imageUtils'
-import { panelGeometry, resolveFrame } from '../lib/geometry'
+import { resolveFrame } from '../lib/geometry'
 import { PanelNode } from './PanelNode'
 import type { SnapLines } from '../types'
 
@@ -28,6 +28,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const [snapLines, setSnapLines] = useState<SnapLines | null>(null)
   const [tip, setTip] = useState<string | null>(null)
   const [mouse, setMouse] = useState({ x: 0, y: 0 })
+  const [spaceHeld, setSpaceHeld] = useState(false)
 
   const wall = useStore((s) => s.wall)
   const panels = useStore((s) => s.panels)
@@ -97,8 +98,8 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   // space-to-pan viewport
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { if (e.code === 'Space') spaceRef.current = true }
-    const up = (e: KeyboardEvent) => { if (e.code === 'Space') spaceRef.current = false }
+    const down = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = true; setSpaceHeld(true) } }
+    const up = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = false; setSpaceHeld(false) } }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
@@ -130,8 +131,6 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     scaleX: viewport.scale,
     scaleY: viewport.scale,
   }
-
-  const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
 
   // ghost image
   const ghostW = sourceImage ? sourceImage.nativeWidth * placement.scale : 0
@@ -176,7 +175,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
         const rect = e.currentTarget.getBoundingClientRect()
         setMouse({ x: e.clientX - rect.left, y: e.clientY - rect.top })
       }}
-      style={{ cursor: spaceRef.current ? 'grab' : 'default' }}
+      style={{ cursor: spaceHeld ? 'grab' : 'default' }}
     >
       <Stage width={size.w} height={size.h}>
         <Layer>
@@ -254,26 +253,28 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
             )}
           </Group>
 
-          {/* panels (above wall; within wall area) */}
+          {/* panels (above wall; within wall area). Selected panel rendered last for z-order. */}
           <Group {...worldTransform}>
-            {panels.map((p, i) => (
-              <PanelNode
-                key={p.id}
-                panel={p}
-                frame={resolveFrame(p, frame, perPanelFrame)}
-                selected={!isPreview && selectedId === p.id}
-                image={imageEl}
-                scale={placement.scale}
-                panX={placement.panX}
-                panY={placement.panY}
-                others={panels.filter((q) => q.id !== p.id).map((q) => ({ panel: q, frame: resolveFrame(q, frame, perPanelFrame) }))}
-                viewportScale={viewport.scale}
-                index={i}
-                showLabel={isPreview}
-                setSnapLines={setSnapLines}
-                setTip={setTip}
-              />
-            ))}
+            {panels
+              .slice()
+              .sort((a, b) => (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0))
+              .map((p) => (
+                <PanelNode
+                  key={p.id}
+                  panel={p}
+                  frame={resolveFrame(p, frame, perPanelFrame)}
+                  selected={!isPreview && selectedId === p.id}
+                  image={imageEl}
+                  scale={placement.scale}
+                  panX={placement.panX}
+                  panY={placement.panY}
+                  others={panels.filter((q) => q.id !== p.id).map((q) => ({ panel: q, frame: resolveFrame(q, frame, perPanelFrame) }))}
+                  viewportScale={viewport.scale}
+                  showLabel={isPreview}
+                  setSnapLines={setSnapLines}
+                  setTip={setTip}
+                />
+              ))}
           </Group>
 
           {/* snap guides */}

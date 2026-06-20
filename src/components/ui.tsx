@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { HexColorPicker } from 'react-colorful'
 
 interface NumberFieldProps {
@@ -134,19 +134,21 @@ export function CommitNumberField({
   disabled?: boolean
   suffix?: string
 }) {
-  const [text, setText] = useState(String(Math.round(value * 100) / 100))
-  useEffect(() => {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState('')
+  const display = editing ? text : String(Math.round(value * 100) / 100)
+  const beginEdit = () => {
+    setEditing(true)
     setText(String(Math.round(value * 100) / 100))
-  }, [value])
+  }
   const commit = () => {
+    setEditing(false)
     const v = Number(text)
     if (Number.isFinite(v)) {
       let out = v
       if (min !== undefined) out = Math.max(min, out)
       if (max !== undefined) out = Math.min(max, out)
       onCommit(out)
-    } else {
-      setText(String(Math.round(value * 100) / 100))
     }
   }
   return (
@@ -155,8 +157,10 @@ export function CommitNumberField({
       <input
         type="text"
         inputMode="decimal"
-        value={text}
+        step={step}
+        value={display}
         disabled={disabled}
+        onFocus={beginEdit}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}

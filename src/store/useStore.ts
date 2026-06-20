@@ -151,7 +151,12 @@ export const useStore = create<State>()(
             ? `This image is low resolution (${dims.width}×${dims.height}px). Prints may look soft at large sizes.`
             : null
           await idbSetImage(img)
-          set({ sourceImage: img, imageLoading: false, imageWarning: warn, screen: 'editor', image: { ...DEFAULT_IMAGE } })
+          set({
+            sourceImage: img,
+            imageLoading: false,
+            imageWarning: warn,
+            image: { ...DEFAULT_IMAGE },
+          })
         } catch (e) {
           console.error(e)
           set({ imageLoading: false, imageWarning: 'Could not load this image. Try a JPEG, PNG, or WebP file.' })
@@ -214,10 +219,9 @@ export const useStore = create<State>()(
       },
 
       addPanel: () => {
-        const { panels, wall, unit, frame } = get()
+        const { panels, wall, unit } = get()
         if (panels.length >= 8) return
         const [w, h] = defaultSize(unit)
-        const e = frame.edgeWidth
         const innerX = (wall.width - w) / 2
         const innerY = (wall.height - h) / 2
         const panel: Panel = { id: makePanelId(), width: w, height: h, x: innerX, y: innerY, sizePreset: findPreset(unit, w, h) }

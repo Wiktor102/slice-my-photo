@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Smoke test artifacts
+smoke-out.txt
+smoke-test.png
+smoke-export.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

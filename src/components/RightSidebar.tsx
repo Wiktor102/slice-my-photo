@@ -1,6 +1,6 @@
 import { useStore } from '../store/useStore'
 import { FRAME_SIZES, getPreset } from '../lib/frameSizes'
-import { FRAME_COLORS, MAT_COLORS, frameHex, matHex } from '../lib/frameColors'
+import { FRAME_COLORS, MAT_COLORS } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
 import { CommitNumberField, NumberField, Segmented, Swatches, Toggle } from './ui'
 

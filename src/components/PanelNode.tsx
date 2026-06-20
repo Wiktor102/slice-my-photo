@@ -18,14 +18,13 @@ interface Props {
   panY: number
   others: { panel: Panel; frame: PerPanelFrame }[]
   viewportScale: number
-  index: number
   showLabel: boolean
   setSnapLines: (s: SnapLines | null) => void
   setTip: (t: string | null) => void
 }
 
 export function PanelNode({
-  panel, frame, selected, image, scale, panX, panY, others, viewportScale, index, showLabel, setSnapLines, setTip,
+  panel, frame, selected, image, scale, panX, panY, others, viewportScale, showLabel, setSnapLines, setTip,
 }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -110,10 +109,13 @@ export function PanelNode({
     setTip(null)
   }
 
-  const imgW = image ? image.naturalWidth * scale : 0
-  const imgH = image ? image.naturalHeight * scale : 0
-  const imgLocalX = panX - outer.x
-  const imgLocalY = panY - outer.y
+  // source-pixel crop for the visible region
+  const cropX = (visible.x - panX) / scale
+  const cropY = (visible.y - panY) / scale
+  const cropW = visible.w / scale
+  const cropH = visible.h / scale
+  const visLocalX = e + m
+  const visLocalY = e + m
 
   return (
     <>
@@ -135,32 +137,26 @@ export function PanelNode({
           height={outer.h}
           fill={frameColor}
           shadow={frame.shadow ? 'black' : undefined}
-          shadowBlur={frame.shadow ? 18 / viewportScale : 0}
-          shadowOffset={{ x: 0, y: 6 / viewportScale }}
+          shadowBlur={frame.shadow ? 18 : 0}
+          shadowOffset={{ x: 0, y: 6 }}
           shadowOpacity={frame.shadow ? 0.35 : 0}
           shadowForStrokeEnabled={false}
         />
         {frame.matEnabled && (
           <Rect x={e} y={e} width={inner.w} height={inner.h} fill={matColor} />
         )}
-        <Group
-          clipX={e + m}
-          clipY={e + m}
-          clipWidth={visible.w}
-          clipHeight={visible.h}
-        >
-          <Rect x={e + m} y={e + m} width={visible.w} height={visible.h} fill="#ffffff" />
-          {image && (
-            <KonvaImage
-              image={image}
-              x={imgLocalX}
-              y={imgLocalY}
-              width={imgW}
-              height={imgH}
-              listening={false}
-            />
-          )}
-        </Group>
+        <Rect x={visLocalX} y={visLocalY} width={visible.w} height={visible.h} fill="#ffffff" listening={false} />
+        {image && (
+          <KonvaImage
+            image={image}
+            x={visLocalX}
+            y={visLocalY}
+            width={visible.w}
+            height={visible.h}
+            crop={{ x: cropX, y: cropY, width: cropW, height: cropH }}
+            listening={false}
+          />
+        )}
         {showLabel && (
           <Rect
             x={outer.w / 2 - 12}
@@ -179,15 +175,15 @@ export function PanelNode({
           rotateEnabled={false}
           keepRatio={!!panel.lockAspect}
           borderStroke="#4a7dff"
-          borderStrokeWidth={1.5 / viewportScale}
+          borderStrokeWidth={1.5}
           anchorStroke="#4a7dff"
           anchorFill="#ffffff"
-          anchorSize={9 / viewportScale}
+          anchorSize={9}
           anchorCornerRadius={2}
           flipEnabled={false}
           boundBoxFunc={(oldBox, newBox) => {
-            const minOuter = (10 + 2 * e) * viewportScale
-            if (newBox.width < minOuter || newBox.height < minOuter) return oldBox
+            const minOuterScreen = (10 + 2 * e) * viewportScale
+            if (newBox.width < minOuterScreen || newBox.height < minOuterScreen) return oldBox
             return newBox
           }}
         />
