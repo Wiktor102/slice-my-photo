@@ -26,6 +26,8 @@ export interface Panel {
   y: number
   /** selected size preset key, or 'custom' */
   sizePreset: string
+  /** lock aspect ratio when resizing via numeric fields */
+  lockAspect?: boolean
 }
 
 export interface FrameStyle {

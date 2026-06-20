@@ -42,6 +42,7 @@ interface State {
   exportOpen: boolean
   confirmReset: boolean
   changeImageOpen: boolean
+  zoomToFitToken: number
 
   // actions
   setUnit: (u: Unit) => void
@@ -72,6 +73,7 @@ interface State {
   resetImage: () => void
 
   setViewport: (partial: Partial<Viewport>) => void
+  requestZoomToFit: () => void
   toggleGrid: () => void
   setPreview: (p: boolean) => void
   setExportOpen: (o: boolean) => void
@@ -132,6 +134,7 @@ export const useStore = create<State>()(
       exportOpen: false,
       confirmReset: false,
       changeImageOpen: false,
+      zoomToFitToken: 0,
 
       setUnit: (u) => {
         const defaultKey = u === 'cm' ? 'cm-40x60' : 'in-16x20'
@@ -319,6 +322,7 @@ export const useStore = create<State>()(
       resetImage: () => set({ image: { ...DEFAULT_IMAGE } }),
 
       setViewport: (partial) => set({ viewport: { ...get().viewport, ...partial } }),
+      requestZoomToFit: () => set({ zoomToFitToken: get().zoomToFitToken + 1 }),
       toggleGrid: () => set({ showGrid: !get().showGrid }),
       setPreview: (p) => set({ preview: p }),
       setExportOpen: (o) => set({ exportOpen: o }),
