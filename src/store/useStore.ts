@@ -28,6 +28,7 @@ interface State {
   wall: WallSetup
   panels: Panel[]
   selectedId: string | null
+  imageSelected: boolean
   perPanelFrame: Record<string, PerPanelFrame>
 
   frame: FrameStyle
@@ -59,6 +60,7 @@ interface State {
   addPanel: () => void
   deletePanel: (id: string) => void
   selectPanel: (id: string | null) => void
+  selectImage: (b: boolean) => void
   updatePanel: (id: string, partial: Partial<Panel>) => void
   setPanelSize: (id: string, w: number, h: number, presetKey: string) => void
   setPanelOuterPosition: (id: string, outerX: number, outerY: number) => void
@@ -70,6 +72,7 @@ interface State {
   setImageMode: (mode: ImageTransform['mode']) => void
   setImageZoom: (z: number) => void
   setImagePan: (panX: number, panY: number) => void
+  setImageTransform: (zoom: number, panX: number, panY: number) => void
   resetImage: () => void
 
   setViewport: (partial: Partial<Viewport>) => void
@@ -120,6 +123,7 @@ export const useStore = create<State>()(
       wall: { ...DEFAULT_WALL },
       panels: [],
       selectedId: null,
+      imageSelected: false,
       perPanelFrame: {},
 
       frame: { ...DEFAULT_FRAME },
@@ -167,7 +171,7 @@ export const useStore = create<State>()(
 
       clearImage: async () => {
         await idbClearImage()
-        set({ sourceImage: null, screen: 'upload', panels: [], selectedId: null, perPanelFrame: {}, image: { ...DEFAULT_IMAGE } })
+        set({ sourceImage: null, screen: 'upload', panels: [], selectedId: null, imageSelected: false, perPanelFrame: {}, image: { ...DEFAULT_IMAGE } })
       },
 
       setScreen: (s) => set({ screen: s }),
@@ -236,7 +240,9 @@ export const useStore = create<State>()(
         set({ panels: next, selectedId: selectedId === id ? null : selectedId, perPanelFrame: nextPer, presetActive: null })
       },
 
-      selectPanel: (id) => set({ selectedId: id }),
+      selectPanel: (id) => set({ selectedId: id, imageSelected: false }),
+
+      selectImage: (b) => set({ imageSelected: b, selectedId: b ? null : get().selectedId }),
 
       updatePanel: (id, partial) => {
         const { unit } = get()
@@ -323,6 +329,8 @@ export const useStore = create<State>()(
       setImageMode: (mode) => set({ image: { ...get().image, mode } }),
       setImageZoom: (z) => set({ image: { ...get().image, mode: 'custom', zoom: Math.max(1, Math.min(3, z)) } }),
       setImagePan: (panX, panY) => set({ image: { ...get().image, mode: 'custom', panX, panY } }),
+      setImageTransform: (zoom, panX, panY) =>
+        set({ image: { mode: 'custom', zoom: Math.max(1, Math.min(3, zoom)), panX, panY } }),
       resetImage: () => set({ image: { ...DEFAULT_IMAGE } }),
 
       setViewport: (partial) => set({ viewport: { ...get().viewport, ...partial } }),
@@ -337,6 +345,7 @@ export const useStore = create<State>()(
         set({
           panels: [],
           selectedId: null,
+          imageSelected: false,
           perPanelFrame: {},
           wall: { ...DEFAULT_WALL },
           frame: { ...DEFAULT_FRAME },
@@ -370,7 +379,7 @@ export const useStore = create<State>()(
 )
 
 /** Compute the current image placement (scale + pan) from state. */
-export function useImagePlacement(): { scale: number; panX: number; panY: number } {
+export function useImagePlacement(): { scale: number; panX: number; panY: number; fitScale: number } {
   const panels = useStore((s) => s.panels)
   const frame = useStore((s) => s.frame)
   const perPanelFrame = useStore((s) => s.perPanelFrame)
@@ -385,8 +394,8 @@ export function computeImagePlacement(
   perPanelFrame: Record<string, PerPanelFrame>,
   image: ImageTransform,
   sourceImage: SourceImage | null,
-): { scale: number; panX: number; panY: number } {
-  if (!sourceImage || panels.length === 0) return { scale: 1, panX: 0, panY: 0 }
+): { scale: number; panX: number; panY: number; fitScale: number } {
+  if (!sourceImage || panels.length === 0) return { scale: 1, panX: 0, panY: 0, fitScale: 1 }
   const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const g of geoms) {
@@ -396,11 +405,12 @@ export function computeImagePlacement(
     maxY = Math.max(maxY, g.visible.y + g.visible.h)
   }
   const bbox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  const fitScale = imageScaleForMode('fit', bbox, sourceImage, 1)
   const scale = imageScaleForMode(image.mode, bbox, sourceImage, image.zoom)
   if (image.mode === 'custom') {
-    return { scale, panX: image.panX, panY: image.panY }
+    return { scale, panX: image.panX, panY: image.panY, fitScale }
   }
-  return { scale, ...defaultPan(bbox, scale, sourceImage) }
+  return { scale, ...defaultPan(bbox, scale, sourceImage), fitScale }
 }
 
 // ensure getPreset import is used (kept for potential external use)

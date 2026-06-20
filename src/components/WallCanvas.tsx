@@ -47,12 +47,14 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const [tip, setTip] = useState<string | null>(null)
   const [mouse, setMouse] = useState({ x: 0, y: 0 })
   const [spaceHeld, setSpaceHeld] = useState(false)
+  const [imageHovered, setImageHovered] = useState(false)
 
   const wall = useStore((s) => s.wall)
   const panels = useStore((s) => s.panels)
   const frame = useStore((s) => s.frame)
   const perPanelFrame = useStore((s) => s.perPanelFrame)
   const selectedId = useStore((s) => s.selectedId)
+  const imageSelected = useStore((s) => s.imageSelected)
   const viewport = useStore((s) => s.viewport)
   const showGrid = useStore((s) => s.showGrid)
   const preview = useStore((s) => s.preview)
@@ -61,12 +63,24 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const unit = useStore((s) => s.unit)
 
   const setViewport = useStore((s) => s.setViewport)
-  const setImagePan = useStore((s) => s.setImagePan)
+  const setImageTransform = useStore((s) => s.setImageTransform)
   const selectPanel = useStore((s) => s.selectPanel)
+  const selectImage = useStore((s) => s.selectImage)
 
   const placement = useImagePlacement()
   const spaceRef = useRef(false)
-  const dragStartRef = useRef<{ panX: number; panY: number; vx: number; vy: number }>({ panX: 0, panY: 0, vx: 0, vy: 0 })
+  const dragStartRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 })
+  const imgResizeRef = useRef<{
+    fx: number
+    fy: number
+    sx: number
+    sy: number
+    origW: number
+    origH: number
+    diagLen2: number
+    startScale: number
+    fitScale: number
+  } | null>(null)
   const didInitialFit = useRef(false)
 
   const isPreview = forPreview || preview
@@ -154,6 +168,10 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   // ghost image
   const ghostW = sourceImage ? sourceImage.nativeWidth * placement.scale : 0
   const ghostH = sourceImage ? sourceImage.nativeHeight * placement.scale : 0
+  const fitScale = placement.fitScale
+
+  // image is interactive only in the editor, when not space-panning, and when there are panels to map onto
+  const imageInteractive = !isPreview && !spaceHeld && panels.length > 0
 
   // visible world range
   const visLeft = viewport.x
@@ -172,7 +190,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   const handleBgDragStart = () => {
     const st = useStore.getState()
-    dragStartRef.current = { panX: st.image.panX, panY: st.image.panY, vx: st.viewport.x, vy: st.viewport.y }
+    dragStartRef.current = { vx: st.viewport.x, vy: st.viewport.y }
   }
   const handleBgDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target as Konva.Rect
@@ -180,16 +198,98 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     const dy = node.y()
     node.x(0)
     node.y(0)
-    if (spaceRef.current) {
-      const { vx, vy } = dragStartRef.current
-      setViewport({ x: vx - dx / scale, y: vy - dy / scale })
-    } else {
-      const { panX, panY } = dragStartRef.current
-      setImagePan(panX + dx / scale, panY + dy / scale)
-    }
+    const { vx, vy } = dragStartRef.current
+    setViewport({ x: vx - dx / scale, y: vy - dy / scale })
   }
   const handleBgClick = () => {
-    if (!spaceRef.current) selectPanel(null)
+    if (!spaceRef.current) {
+      selectPanel(null)
+      selectImage(false)
+    }
+  }
+
+  // --- image interaction -----------------------------------------------------
+  const handleImageClick = () => {
+    if (!imageInteractive) return
+    selectImage(true)
+  }
+  const handleImageDragStart = () => {
+    selectImage(true)
+    // switch to custom mode using the currently displayed scale/pan so the
+    // transition from fit/fill -> custom is seamless
+    const zoom = fitScale > 0 ? placement.scale / fitScale : 1
+    setImageTransform(zoom, placement.panX, placement.panY)
+  }
+  const handleImageDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target as Konva.Image
+    const img = useStore.getState().image
+    setImageTransform(img.zoom, node.x(), node.y())
+  }
+  const handleImageDragEnd = () => {
+    setTip(null)
+  }
+
+  // --- image corner-handle resize (writes to store every move -> live crops) ---
+  const startCornerResize = (corner: 'tl' | 'tr' | 'bl' | 'br') => (e: Konva.KonvaEventObject<PointerEvent>) => {
+    e.evt.preventDefault()
+    e.cancelBubble = true
+    const src = sourceImage
+    if (!src) return
+    const x0 = placement.panX
+    const y0 = placement.panY
+    const w = src.nativeWidth * placement.scale
+    const h = src.nativeHeight * placement.scale
+    const corners: Record<typeof corner, { fx: number; fy: number; sx: number; sy: number }> = {
+      tl: { fx: x0 + w, fy: y0 + h, sx: -1, sy: -1 },
+      tr: { fx: x0, fy: y0 + h, sx: 1, sy: -1 },
+      bl: { fx: x0 + w, fy: y0, sx: -1, sy: 1 },
+      br: { fx: x0, fy: y0, sx: 1, sy: 1 },
+    }
+    const c = corners[corner]
+    imgResizeRef.current = {
+      ...c,
+      origW: w,
+      origH: h,
+      diagLen2: w * w + h * h,
+      startScale: placement.scale,
+      fitScale,
+    }
+    selectImage(true)
+    // switch to custom mode at current display values so fit/fill -> custom is seamless
+    const zoom = fitScale > 0 ? placement.scale / fitScale : 1
+    setImageTransform(zoom, placement.panX, placement.panY)
+
+    const move = (ev: PointerEvent) => {
+      const r = imgResizeRef.current
+      const el = containerRef.current
+      if (!r || !el) return
+      const rect = el.getBoundingClientRect()
+      const vp = useStore.getState().viewport
+      const worldX = (ev.clientX - rect.left) / vp.scale + vp.x
+      const worldY = (ev.clientY - rect.top) / vp.scale + vp.y
+      const dx = worldX - r.fx
+      const dy = worldY - r.fy
+      // project the pointer displacement onto the original diagonal direction
+      const t = (dx * r.sx * r.origW + dy * r.sy * r.origH) / r.diagLen2
+      const rawScale = r.startScale * t
+      const rawZoom = r.fitScale > 0 ? rawScale / r.fitScale : 1
+      const newZoom = Math.max(1, Math.min(3, rawZoom))
+      const effScale = r.fitScale > 0 ? r.fitScale * newZoom : rawScale
+      const finalW = src.nativeWidth * effScale
+      const finalH = src.nativeHeight * effScale
+      const panX = r.sx > 0 ? r.fx : r.fx - finalW
+      const panY = r.sy > 0 ? r.fy : r.fy - finalH
+      setTip(`Zoom ${Math.round(newZoom * 100) / 100}\u00d7 fit`)
+      setImageTransform(newZoom, panX, panY)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      imgResizeRef.current = null
+      setTip(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
 
   // emphasized ticks at wall origin / extent
@@ -204,7 +304,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
         const rect = e.currentTarget.getBoundingClientRect()
         setMouse({ x: e.clientX - rect.left, y: e.clientY - rect.top })
       }}
-      style={{ cursor: spaceHeld ? 'grab' : 'default' }}
+      style={{ cursor: !spaceHeld && imageHovered ? 'move' : 'grab' }}
     >
       <Stage width={size.w} height={size.h}>
         <Layer>
@@ -243,9 +343,9 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
             {/* grid + ghost clipped to wall (editor only) */}
             {!isPreview && (
-              <Group clipX={0} clipY={0} clipWidth={wall.width} clipHeight={wall.height} listening={false}>
+              <Group clipX={0} clipY={0} clipWidth={wall.width} clipHeight={wall.height}>
                 {showGrid && (
-                  <Group>
+                  <Group listening={false}>
                     {Array.from({ length: Math.floor(wall.width / gridStep) + 1 }, (_, i) => i * gridStep).map((v, i) => (
                       <Line key={`gx${i}`} points={[v, 0, v, wall.height]} stroke="rgba(255,255,255,0.05)" strokeWidth={1 / scale} />
                     ))}
@@ -261,7 +361,16 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                     y={placement.panY}
                     width={ghostW}
                     height={ghostH}
-                    opacity={0.2}
+                    opacity={imageSelected ? 0.4 : 0.2}
+                    listening={imageInteractive}
+                    draggable={imageInteractive}
+                    onMouseEnter={() => setImageHovered(true)}
+                    onMouseLeave={() => setImageHovered(false)}
+                    onClick={handleImageClick}
+                    onTap={handleImageClick}
+                    onDragStart={handleImageDragStart}
+                    onDragMove={handleImageDragMove}
+                    onDragEnd={handleImageDragEnd}
                   />
                 )}
               </Group>
@@ -288,6 +397,46 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   setTip={setTip}
                 />
               ))}
+
+            {/* selection border + corner handles for proportional scaling of the ghost image */}
+            {imageSelected && !isPreview && panels.length > 0 && sourceImage && ghostW > 0 && (
+              <>
+                <Rect
+                  x={placement.panX}
+                  y={placement.panY}
+                  width={ghostW}
+                  height={ghostH}
+                  stroke="#4a7dff"
+                  strokeWidth={1.5 / scale}
+                  dash={[6 / scale, 4 / scale]}
+                  listening={false}
+                />
+                {(
+                  [
+                    { key: 'tl', cx: placement.panX, cy: placement.panY },
+                    { key: 'tr', cx: placement.panX + ghostW, cy: placement.panY },
+                    { key: 'bl', cx: placement.panX, cy: placement.panY + ghostH },
+                    { key: 'br', cx: placement.panX + ghostW, cy: placement.panY + ghostH },
+                  ] as const
+                ).map((c) => {
+                  const hs = 11 / scale
+                  return (
+                    <Rect
+                      key={c.key}
+                      x={c.cx - hs / 2}
+                      y={c.cy - hs / 2}
+                      width={hs}
+                      height={hs}
+                      fill="#ffffff"
+                      stroke="#4a7dff"
+                      strokeWidth={1.5 / scale}
+                      cornerRadius={2 / scale}
+                      onPointerDown={startCornerResize(c.key)}
+                    />
+                  )
+                })}
+              </>
+            )}
           </Group>
 
           {/* snap guides (span visible range) */}

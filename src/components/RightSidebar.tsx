@@ -180,7 +180,7 @@ export function RightSidebar() {
             onChange={(e) => setImageZoom(Number(e.target.value))}
           />
         </label>
-        <div className="hint">Drag the canvas background to pan the image behind the panels.</div>
+        <div className="hint">Click the image on the canvas to select it, then drag to reposition or drag a corner handle to zoom proportionally. Drag empty canvas to pan the view (hold Space to pan over the image).</div>
       </div>
     </aside>
   )
