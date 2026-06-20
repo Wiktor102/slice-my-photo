@@ -99,3 +99,17 @@ export interface SnapLines {
   vertical: number[]
   horizontal: number[]
 }
+
+export interface SavedLayout {
+  id: string
+  name: string
+  savedAt: number
+  unit: Unit
+  wall: WallSetup
+  panels: Panel[]
+  frame: FrameStyle
+  perPanelFrame: Record<string, PerPanelFrame>
+  gap: number
+  currentSizeKey: string
+  presetActive: string | null
+}

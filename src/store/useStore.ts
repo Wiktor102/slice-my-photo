@@ -5,6 +5,7 @@ import type {
   ImageTransform,
   Panel,
   PerPanelFrame,
+  SavedLayout,
   SourceImage,
   Unit,
   Viewport,
@@ -43,6 +44,9 @@ interface State {
   exportOpen: boolean
   confirmReset: boolean
   changeImageOpen: boolean
+  saveLayoutOpen: boolean
+  loadLayoutOpen: boolean
+  toast: string | null
   zoomToFitToken: number
   zoomToImageToken: number
   canvasSize: { w: number; h: number }
@@ -86,6 +90,10 @@ interface State {
   setExportOpen: (o: boolean) => void
   setConfirmReset: (c: boolean) => void
   setChangeImageOpen: (c: boolean) => void
+  setSaveLayoutOpen: (o: boolean) => void
+  setLoadLayoutOpen: (o: boolean) => void
+  showToast: (msg: string) => void
+  loadLayout: (layout: SavedLayout) => void
 
   resetProject: () => void
 }
@@ -142,6 +150,9 @@ export const useStore = create<State>()(
       exportOpen: false,
       confirmReset: false,
       changeImageOpen: false,
+      saveLayoutOpen: false,
+      loadLayoutOpen: false,
+      toast: null,
       zoomToFitToken: 0,
       zoomToImageToken: 0,
       canvasSize: { w: 0, h: 0 },
@@ -348,6 +359,33 @@ export const useStore = create<State>()(
       setExportOpen: (o) => set({ exportOpen: o }),
       setConfirmReset: (c) => set({ confirmReset: c }),
       setChangeImageOpen: (c) => set({ changeImageOpen: c }),
+      setSaveLayoutOpen: (o) => set({ saveLayoutOpen: o }),
+      setLoadLayoutOpen: (o) => set({ loadLayoutOpen: o }),
+      showToast: (msg) => {
+        set({ toast: msg })
+        setTimeout(() => set((s) => (s.toast === msg ? { toast: null } : {})), 2500)
+      },
+      loadLayout: (layout) => {
+        const prevUnit = get().unit
+        set({
+          unit: layout.unit,
+          wall: { ...layout.wall },
+          panels: layout.panels.map((p) => ({ ...p })),
+          frame: { ...layout.frame },
+          perPanelFrame: { ...layout.perPanelFrame },
+          gap: layout.gap,
+          currentSizeKey: layout.currentSizeKey,
+          presetActive: layout.presetActive,
+          selectedId: null,
+          imageSelected: false,
+          image: { ...DEFAULT_IMAGE },
+          loadLayoutOpen: false,
+        })
+        if (layout.unit !== prevUnit) {
+          const label = layout.unit === 'cm' ? 'cm' : 'inches'
+          setTimeout(() => get().showToast(`Units switched to ${label} to match the loaded layout.`), 100)
+        }
+      },
 
       resetProject: () =>
         set({
