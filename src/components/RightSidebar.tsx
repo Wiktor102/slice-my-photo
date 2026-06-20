@@ -30,9 +30,11 @@ export function RightSidebar() {
   const selGeom = selected && selFrame ? panelGeometry(selected, selFrame) : null
   const hasOverride = selected ? Boolean(perPanelFrame[selected.id]) : false
   const sizePresetOptions = FRAME_SIZES[unit]
+  // Frame section shows the selected panel's resolved frame when in per-panel mode.
+  const displayFrame = frame.perPanel && selFrame ? selFrame : frame
 
-  const colorOptions = Object.entries(FRAME_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? frame.customColor : v.hex }))
-  const matColorOptions = Object.entries(MAT_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? frame.matCustomColor : v.hex }))
+  const colorOptions = Object.entries(FRAME_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? displayFrame.customColor : v.hex }))
+  const matColorOptions = Object.entries(MAT_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? displayFrame.matCustomColor : v.hex }))
 
   return (
     <aside className="sidebar right">
@@ -128,27 +130,27 @@ export function RightSidebar() {
             <button className="ghost" title="Reset this panel's frame to global" onClick={() => resetFrameToGlobal(selected.id)}>Reset</button>
           )}
         </div>
-        <CommitNumberField label="Frame edge width" value={frame.edgeWidth} suffix={unit} min={0} max={20} step={0.5} onCommit={(v) => setFrame({ edgeWidth: v })} />
+        <CommitNumberField label="Frame edge width" value={displayFrame.edgeWidth} suffix={unit} min={0} max={20} step={0.5} onCommit={(v) => setFrame({ edgeWidth: v })} />
         <label className="field"><span>Frame color</span>
           <Swatches
             options={colorOptions}
-            value={frame.colorKey}
-            customColor={frame.customColor}
+            value={displayFrame.colorKey}
+            customColor={displayFrame.customColor}
             onPick={(k) => setFrame({ colorKey: k as never })}
             onCustomColor={(hex) => setFrame({ colorKey: 'custom', customColor: hex })}
           />
         </label>
         <div style={{ marginTop: 8 }}>
-          <Toggle on={frame.matEnabled} onChange={(v) => setFrame({ matEnabled: v })} label="Mat / passepartout" />
+          <Toggle on={displayFrame.matEnabled} onChange={(v) => setFrame({ matEnabled: v })} label="Mat / passepartout" />
         </div>
-        {frame.matEnabled && (
+        {displayFrame.matEnabled && (
           <>
-            <CommitNumberField label="Mat width" value={frame.matWidth} suffix={unit} min={1} max={10} step={0.5} onCommit={(v) => setFrame({ matWidth: v })} />
+            <CommitNumberField label="Mat width" value={displayFrame.matWidth} suffix={unit} min={1} max={5} step={0.5} onCommit={(v) => setFrame({ matWidth: v })} />
             <label className="field"><span>Mat color</span>
               <Swatches
                 options={matColorOptions}
-                value={frame.matColorKey}
-                customColor={frame.matCustomColor}
+                value={displayFrame.matColorKey}
+                customColor={displayFrame.matCustomColor}
                 onPick={(k) => setFrame({ matColorKey: k as never })}
                 onCustomColor={(hex) => setFrame({ matColorKey: 'custom', matCustomColor: hex })}
               />
@@ -156,7 +158,7 @@ export function RightSidebar() {
           </>
         )}
         <div style={{ marginTop: 8 }}>
-          <Toggle on={frame.shadow} onChange={(v) => setFrame({ shadow: v })} label="Drop shadow" />
+          <Toggle on={displayFrame.shadow} onChange={(v) => setFrame({ shadow: v })} label="Drop shadow" />
         </div>
       </div>
 

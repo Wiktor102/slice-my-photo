@@ -62,6 +62,9 @@ export function PanelNode({
     const { snap, offsetX, offsetY } = computeSnaps(movingPanel, frame, others, viewportScale)
     ox += offsetX
     oy += offsetY
+    const wall = useStore.getState().wall
+    ox = Math.max(0, Math.min(ox, wall.width - outer.w))
+    oy = Math.max(0, Math.min(oy, wall.height - outer.h))
     node.x(ox)
     node.y(oy)
     setSnapLines(snap)

@@ -58,8 +58,13 @@ const page = await browser.newPage({ acceptDownloads: true })
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()) })
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
 await page.addInitScript(() => {
-  try { localStorage.clear() } catch {}
-  try { indexedDB.deleteDatabase('slice-my-photo') } catch {}
+  try {
+    if (!localStorage.getItem('__test_seeded')) {
+      localStorage.clear()
+      indexedDB.deleteDatabase('slice-my-photo')
+      localStorage.setItem('__test_seeded', '1')
+    }
+  } catch {}
 })
 
 const step = async (name, fn) => { try { await fn(); console.log('OK:', name) } catch (e) { console.log('FAIL:', name, '-', e.message); errors.push(name + ': ' + e.message) } }
@@ -117,6 +122,15 @@ await step('preview toggle', async () => {
   await page.waitForTimeout(300)
   await page.click('button:has-text("Back to Editor")')
   await page.waitForTimeout(200)
+})
+
+await step('reload resumes session', async () => {
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.editor', { timeout: 8000 })
+  await page.waitForTimeout(500)
+  const n = await page.locator('.panel-row').count()
+  if (n < 3) throw new Error('resume failed: expected >=3 panels, got ' + n)
+  console.log('   resumed panels:', n)
 })
 
 await browser.close()
