@@ -9,6 +9,9 @@ import type { SnapLines } from '../types'
 
 const PAD = 48
 const RULER = 22
+const EDITOR_BG = '#111114'
+const PREVIEW_BG = '#0e0e12'
+const WALL_OUTLINE = '#3fb950'
 
 function niceStep(raw: number): number {
   const pow = Math.pow(10, Math.floor(Math.log10(raw)))
@@ -19,6 +22,21 @@ function niceStep(raw: number): number {
   else if (n < 7) nice = 5
   else nice = 10
   return nice * pow
+}
+
+function formatNum(v: number): string {
+  const r = Math.round(v * 100) / 100
+  if (Number.isInteger(r)) return String(r)
+  return String(r)
+}
+
+function ticksInRange(min: number, max: number, step: number): number[] {
+  const start = Math.floor(min / step) * step
+  const arr: number[] = []
+  for (let v = start; v <= max + 1e-6; v += step) {
+    arr.push(Math.round(v * 100) / 100)
+  }
+  return arr
 }
 
 export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
@@ -40,6 +58,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const preview = useStore((s) => s.preview)
   const sourceImage = useStore((s) => s.sourceImage)
   const zoomToFitToken = useStore((s) => s.zoomToFitToken)
+  const unit = useStore((s) => s.unit)
 
   const setViewport = useStore((s) => s.setViewport)
   const setImagePan = useStore((s) => s.setImagePan)
@@ -51,6 +70,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const didInitialFit = useRef(false)
 
   const isPreview = forPreview || preview
+  const scale = viewport.scale
 
   // measure container
   useLayoutEffect(() => {
@@ -75,8 +95,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   }, [sourceImage])
 
   const fit = (cw: number, ch: number) => {
-    const scale = Math.min((cw - 2 * PAD) / wall.width, (ch - 2 * PAD) / wall.height)
-    const s = Math.max(0.2, scale)
+    const s = Math.max(0.2, Math.min((cw - 2 * PAD) / wall.width, (ch - 2 * PAD) / wall.height))
     const x = wall.width / 2 - cw / 2 / s
     const y = wall.height / 2 - ch / 2 / s
     setViewport({ x, y, scale: s })
@@ -126,24 +145,30 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   }, [setViewport])
 
   const worldTransform = {
-    x: -viewport.x * viewport.scale,
-    y: -viewport.y * viewport.scale,
-    scaleX: viewport.scale,
-    scaleY: viewport.scale,
+    x: -viewport.x * scale,
+    y: -viewport.y * scale,
+    scaleX: scale,
+    scaleY: scale,
   }
 
   // ghost image
   const ghostW = sourceImage ? sourceImage.nativeWidth * placement.scale : 0
   const ghostH = sourceImage ? sourceImage.nativeHeight * placement.scale : 0
 
-  // rulers
-  const step = niceStep(70 / viewport.scale)
-  const xTicks: number[] = []
-  for (let v = 0; v <= wall.width + 0.001; v += step) xTicks.push(Math.round(v * 100) / 100)
-  const yTicks: number[] = []
-  for (let v = 0; v <= wall.height + 0.001; v += step) yTicks.push(Math.round(v * 100) / 100)
+  // visible world range
+  const visLeft = viewport.x
+  const visTop = viewport.y
+  const visRight = viewport.x + size.w / scale
+  const visBottom = viewport.y + size.h / scale
 
-  const gridStep = niceStep(50 / viewport.scale)
+  // ruler ticks (world units, ~70px apart on screen)
+  const rStep = niceStep(70 / scale)
+  const xTicks = ticksInRange(visLeft, visRight, rStep)
+  const yTicks = ticksInRange(visTop, visBottom, rStep)
+  const sx = (v: number) => (v - viewport.x) * scale
+  const sy = (v: number) => (v - viewport.y) * scale
+
+  const gridStep = niceStep(50 / scale)
 
   const handleBgDragStart = () => {
     const st = useStore.getState()
@@ -157,15 +182,19 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     node.y(0)
     if (spaceRef.current) {
       const { vx, vy } = dragStartRef.current
-      setViewport({ x: vx - dx, y: vy - dy })
+      setViewport({ x: vx - dx / scale, y: vy - dy / scale })
     } else {
       const { panX, panY } = dragStartRef.current
-      setImagePan(panX + dx, panY + dy)
+      setImagePan(panX + dx / scale, panY + dy / scale)
     }
   }
   const handleBgClick = () => {
     if (!spaceRef.current) selectPanel(null)
   }
+
+  // emphasized ticks at wall origin / extent
+  const emphX = [0, wall.width].filter((v) => v >= visLeft - rStep && v <= visRight + rStep)
+  const emphY = [0, wall.height].filter((v) => v >= visTop - rStep && v <= visBottom + rStep)
 
   return (
     <div
@@ -179,82 +208,66 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     >
       <Stage width={size.w} height={size.h}>
         <Layer>
-          {/* rulers (screen-ish space but drawn in world coords via the world group) */}
-          {!isPreview && (
-            <Group {...worldTransform} listening={false}>
-              {/* horizontal ruler above wall */}
-              <Rect x={-RULER} y={-RULER} width={wall.width + RULER} height={RULER} fill="#1d1d23" />
-              <Rect x={-RULER} y={-RULER} width={RULER} height={wall.height + RULER} fill="#1d1d23" />
-              {xTicks.map((v, i) => (
-                <Group key={`xt${i}`}>
-                  <Line points={[v, -RULER, v, 0]} stroke="#5a5a66" strokeWidth={1 / viewport.scale} />
-                  <Text
-                    x={v + 2 / viewport.scale}
-                    y={-RULER + 4 / viewport.scale}
-                    text={`${v}`}
-                    fontSize={9 / viewport.scale}
-                    fill="#9a9aa8"
-                  />
-                </Group>
-              ))}
-              {yTicks.map((v, i) => (
-                <Group key={`yt${i}`}>
-                  <Line points={[-RULER, v, 0, v]} stroke="#5a5a66" strokeWidth={1 / viewport.scale} />
-                  <Text
-                    x={-RULER + 3 / viewport.scale}
-                    y={v + 2 / viewport.scale}
-                    text={`${v}`}
-                    fontSize={9 / viewport.scale}
-                    fill="#9a9aa8"
-                  />
-                </Group>
-              ))}
-              <Line points={[0, 0, wall.width, 0]} stroke="#3a3a44" strokeWidth={1 / viewport.scale} />
-              <Line points={[0, 0, 0, wall.height]} stroke="#3a3a44" strokeWidth={1 / viewport.scale} />
-            </Group>
-          )}
+          {/* infinite dark background + pan/drag catcher (screen space) */}
+          <Rect
+            x={0}
+            y={0}
+            width={size.w}
+            height={size.h}
+            fill={isPreview ? PREVIEW_BG : EDITOR_BG}
+            draggable={!isPreview}
+            onDragStart={handleBgDragStart}
+            onDragMove={handleBgDragMove}
+            onClick={handleBgClick}
+            onTap={handleBgClick}
+          />
 
-          <Group {...worldTransform} clipX={0} clipY={0} clipWidth={wall.width} clipHeight={wall.height}>
-            {/* wall background (also the pan catcher) */}
-            <Rect
-              x={0}
-              y={0}
-              width={wall.width}
-              height={wall.height}
-              fill={wall.color}
-              draggable={!isPreview}
-              onDragStart={handleBgDragStart}
-              onDragMove={handleBgDragMove}
-              onClick={handleBgClick}
-              onTap={handleBgClick}
-            />
-            {/* grid */}
-            {showGrid && !isPreview && (
-              <Group listening={false}>
-                {Array.from({ length: Math.floor(wall.width / gridStep) + 1 }, (_, i) => i * gridStep).map((v, i) => (
-                  <Line key={`gx${i}`} points={[v, 0, v, wall.height]} stroke="rgba(0,0,0,0.06)" strokeWidth={1 / viewport.scale} />
-                ))}
-                {Array.from({ length: Math.floor(wall.height / gridStep) + 1 }, (_, i) => i * gridStep).map((v, i) => (
-                  <Line key={`gy${i}`} points={[0, v, wall.width, v]} stroke="rgba(0,0,0,0.06)" strokeWidth={1 / viewport.scale} />
-                ))}
-              </Group>
-            )}
-            {/* ghost image (20% outside panels) */}
-            {imageEl && !isPreview && (
-              <KonvaImage
-                image={imageEl}
-                x={placement.panX}
-                y={placement.panY}
-                width={ghostW}
-                height={ghostH}
-                opacity={0.2}
+          {/* world content */}
+          <Group {...worldTransform}>
+            {/* wall: green outline (editor) or filled (preview) */}
+            {isPreview ? (
+              <Rect x={0} y={0} width={wall.width} height={wall.height} fill={wall.color} listening={false} />
+            ) : (
+              <Rect
+                x={0}
+                y={0}
+                width={wall.width}
+                height={wall.height}
+                fill="rgba(0,0,0,0)"
+                stroke={WALL_OUTLINE}
+                strokeWidth={2 / scale}
+                dash={[8 / scale, 5 / scale]}
                 listening={false}
               />
             )}
-          </Group>
 
-          {/* panels (above wall; within wall area). Selected panel rendered last for z-order. */}
-          <Group {...worldTransform}>
+            {/* grid + ghost clipped to wall (editor only) */}
+            {!isPreview && (
+              <Group clipX={0} clipY={0} clipWidth={wall.width} clipHeight={wall.height} listening={false}>
+                {showGrid && (
+                  <Group>
+                    {Array.from({ length: Math.floor(wall.width / gridStep) + 1 }, (_, i) => i * gridStep).map((v, i) => (
+                      <Line key={`gx${i}`} points={[v, 0, v, wall.height]} stroke="rgba(255,255,255,0.05)" strokeWidth={1 / scale} />
+                    ))}
+                    {Array.from({ length: Math.floor(wall.height / gridStep) + 1 }, (_, i) => i * gridStep).map((v, i) => (
+                      <Line key={`gy${i}`} points={[0, v, wall.width, v]} stroke="rgba(255,255,255,0.05)" strokeWidth={1 / scale} />
+                    ))}
+                  </Group>
+                )}
+                {imageEl && (
+                  <KonvaImage
+                    image={imageEl}
+                    x={placement.panX}
+                    y={placement.panY}
+                    width={ghostW}
+                    height={ghostH}
+                    opacity={0.2}
+                  />
+                )}
+              </Group>
+            )}
+
+            {/* panels. Selected rendered last for z-order. */}
             {panels
               .slice()
               .sort((a, b) => (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0))
@@ -269,7 +282,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   panX={placement.panX}
                   panY={placement.panY}
                   others={panels.filter((q) => q.id !== p.id).map((q) => ({ panel: q, frame: resolveFrame(q, frame, perPanelFrame) }))}
-                  viewportScale={viewport.scale}
+                  viewportScale={scale}
                   showLabel={isPreview}
                   setSnapLines={setSnapLines}
                   setTip={setTip}
@@ -277,15 +290,51 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
               ))}
           </Group>
 
-          {/* snap guides */}
+          {/* snap guides (span visible range) */}
           {!isPreview && snapLines && (
-            <Group {...worldTransform} listening={false}>
+            <Group listening={false}>
               {snapLines.vertical.map((x, i) => (
-                <Line key={`sv${i}`} points={[x, 0, x, wall.height]} stroke="#e070ff" strokeWidth={1 / viewport.scale} dash={[4 / viewport.scale, 4 / viewport.scale]} />
+                <Line key={`sv${i}`} points={[sx(x), 0, sx(x), size.h]} stroke="#e070ff" strokeWidth={1} dash={[4, 4]} />
               ))}
               {snapLines.horizontal.map((y, i) => (
-                <Line key={`sh${i}`} points={[0, y, wall.width, y]} stroke="#e070ff" strokeWidth={1 / viewport.scale} dash={[4 / viewport.scale, 4 / viewport.scale]} />
+                <Line key={`sh${i}`} points={[0, sy(y), size.w, sy(y)]} stroke="#e070ff" strokeWidth={1} dash={[4, 4]} />
               ))}
+            </Group>
+          )}
+
+          {/* rulers pinned to top/left edges (screen space) */}
+          {!isPreview && (
+            <Group listening={false}>
+              <Rect x={0} y={0} width={size.w} height={RULER} fill="#1d1d23" />
+              <Rect x={0} y={0} width={RULER} height={size.h} fill="#1d1d23" />
+              <Rect x={0} y={0} width={RULER} height={RULER} fill="#16161b" />
+              {/* x ticks */}
+              {xTicks.map((v, i) => {
+                const x = sx(v)
+                if (x < RULER) return null
+                const emph = emphX.includes(v)
+                return (
+                  <Group key={`xt${i}`}>
+                    <Line points={[x, RULER - (emph ? 10 : 6), x, RULER]} stroke={emph ? WALL_OUTLINE : '#5a5a66'} strokeWidth={emph ? 1.4 : 1} />
+                    <Text x={x + 2} y={3} text={formatNum(v)} fontSize={9} fill={emph ? WALL_OUTLINE : '#9a9aa8'} />
+                  </Group>
+                )
+              })}
+              {/* y ticks */}
+              {yTicks.map((v, i) => {
+                const y = sy(v)
+                if (y < RULER) return null
+                const emph = emphY.includes(v)
+                return (
+                  <Group key={`yt${i}`}>
+                    <Line points={[RULER - (emph ? 10 : 6), y, RULER, y]} stroke={emph ? WALL_OUTLINE : '#5a5a66'} strokeWidth={emph ? 1.4 : 1} />
+                    <Text x={2} y={y + 2} text={formatNum(v)} fontSize={9} fill={emph ? WALL_OUTLINE : '#9a9aa8'} />
+                  </Group>
+                )
+              })}
+              <Line points={[0, RULER, size.w, RULER]} stroke="#3a3a44" strokeWidth={1} />
+              <Line points={[RULER, 0, RULER, size.h]} stroke="#3a3a44" strokeWidth={1} />
+              <Text x={4} y={RULER + 4} text={unit} fontSize={9} fill="#6a6a78" />
             </Group>
           )}
         </Layer>
