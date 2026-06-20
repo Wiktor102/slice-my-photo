@@ -1,0 +1,399 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type {
+  FrameStyle,
+  ImageTransform,
+  Panel,
+  PerPanelFrame,
+  SourceImage,
+  Unit,
+  Viewport,
+  WallSetup,
+} from '../types'
+import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
+import { findPreset, getPreset } from '../lib/frameSizes'
+import { clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
+import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
+import { idbSetImage, idbClearImage } from '../lib/idb'
+
+export type Screen = 'upload' | 'editor'
+
+interface State {
+  screen: Screen
+  unit: Unit
+  sourceImage: SourceImage | null
+  imageLoading: boolean
+  imageWarning: string | null
+
+  wall: WallSetup
+  panels: Panel[]
+  selectedId: string | null
+  perPanelFrame: Record<string, PerPanelFrame>
+
+  frame: FrameStyle
+  image: ImageTransform
+  presetActive: string | null
+  gap: number
+  currentSizeKey: string
+
+  viewport: Viewport
+  showGrid: boolean
+  preview: boolean
+  exportOpen: boolean
+  confirmReset: boolean
+  changeImageOpen: boolean
+
+  // actions
+  setUnit: (u: Unit) => void
+  loadImageFromFile: (file: File) => Promise<void>
+  restoreImage: (img: SourceImage) => void
+  clearImage: () => Promise<void>
+  setScreen: (s: Screen) => void
+
+  setWall: (partial: Partial<WallSetup>) => void
+
+  applyPreset: (key: string) => void
+  setGap: (g: number) => void
+  setCurrentSizeKey: (key: string) => void
+  addPanel: () => void
+  deletePanel: (id: string) => void
+  selectPanel: (id: string | null) => void
+  updatePanel: (id: string, partial: Partial<Panel>) => void
+  setPanelSize: (id: string, w: number, h: number, presetKey: string) => void
+  setPanelOuterPosition: (id: string, outerX: number, outerY: number) => void
+  orientPanel: (id: string) => void
+
+  setFrame: (partial: Partial<FrameStyle>) => void
+  resetFrameToGlobal: (id: string) => void
+
+  setImageMode: (mode: ImageTransform['mode']) => void
+  setImageZoom: (z: number) => void
+  setImagePan: (panX: number, panY: number) => void
+  resetImage: () => void
+
+  setViewport: (partial: Partial<Viewport>) => void
+  toggleGrid: () => void
+  setPreview: (p: boolean) => void
+  setExportOpen: (o: boolean) => void
+  setConfirmReset: (c: boolean) => void
+  setChangeImageOpen: (c: boolean) => void
+
+  resetProject: () => void
+}
+
+const DEFAULT_FRAME: FrameStyle = {
+  edgeWidth: 2,
+  colorKey: 'black',
+  customColor: '#000000',
+  matEnabled: false,
+  matWidth: 3,
+  matColorKey: 'white',
+  matCustomColor: '#ffffff',
+  shadow: true,
+  perPanel: false,
+}
+
+const DEFAULT_IMAGE: ImageTransform = {
+  mode: 'fill',
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+}
+
+const DEFAULT_WALL: WallSetup = { width: 300, height: 250, color: '#F5F5F5' }
+
+function defaultSize(unit: Unit): [number, number] {
+  return unit === 'cm' ? [40, 60] : [16, 20]
+}
+
+export const useStore = create<State>()(
+  persist(
+    (set, get) => ({
+      screen: 'upload',
+      unit: 'cm',
+      sourceImage: null,
+      imageLoading: false,
+      imageWarning: null,
+
+      wall: { ...DEFAULT_WALL },
+      panels: [],
+      selectedId: null,
+      perPanelFrame: {},
+
+      frame: { ...DEFAULT_FRAME },
+      image: { ...DEFAULT_IMAGE },
+      presetActive: null,
+      gap: 3,
+      currentSizeKey: 'cm-40x60',
+
+      viewport: { x: 0, y: 0, scale: 3 },
+      showGrid: true,
+      preview: false,
+      exportOpen: false,
+      confirmReset: false,
+      changeImageOpen: false,
+
+      setUnit: (u) => {
+        const defaultKey = u === 'cm' ? 'cm-40x60' : 'in-16x20'
+        set({ unit: u, currentSizeKey: defaultKey })
+      },
+
+      loadImageFromFile: async (file) => {
+        set({ imageLoading: true, imageWarning: null })
+        try {
+          const dims = await readImageDimensions(file)
+          const { proxyUrl, fullUrl } = await buildImageBlobs(file)
+          const img = buildSourceImage(file, dims.width, dims.height, proxyUrl, fullUrl)
+          const warn = megapixels(dims.width, dims.height) < 1
+            ? `This image is low resolution (${dims.width}×${dims.height}px). Prints may look soft at large sizes.`
+            : null
+          await idbSetImage(img)
+          set({ sourceImage: img, imageLoading: false, imageWarning: warn, screen: 'editor', image: { ...DEFAULT_IMAGE } })
+        } catch (e) {
+          console.error(e)
+          set({ imageLoading: false, imageWarning: 'Could not load this image. Try a JPEG, PNG, or WebP file.' })
+        }
+      },
+
+      restoreImage: (img) => set({ sourceImage: img, screen: 'editor' }),
+
+      clearImage: async () => {
+        await idbClearImage()
+        set({ sourceImage: null, screen: 'upload', panels: [], selectedId: null, perPanelFrame: {}, image: { ...DEFAULT_IMAGE } })
+      },
+
+      setScreen: (s) => set({ screen: s }),
+
+      setWall: (partial) => {
+        const wall = { ...get().wall, ...partial }
+        if (wall.width < 10) wall.width = 10
+        if (wall.height < 10) wall.height = 10
+        set({ wall })
+        // clamp all panels into the new wall
+        const { panels, frame, perPanelFrame } = get()
+        const clamped = panels.map((p) => clampPanelToWall(p, resolveFrame(p, frame, perPanelFrame), wall.width, wall.height))
+        set({ panels: clamped })
+      },
+
+      applyPreset: (key) => {
+        const preset = PRESETS.find((p) => p.key === key)
+        if (!preset) return
+        const { unit, currentSizeKey, gap, frame, wall } = get()
+        const panels = instantiatePreset(preset, currentSizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
+        set({ panels, presetActive: key, selectedId: null, perPanelFrame: {}, image: { ...DEFAULT_IMAGE } })
+      },
+
+      setGap: (g) => {
+        const gap = Math.max(0, g)
+        set({ gap })
+        const { presetActive } = get()
+        if (presetActive) {
+          const preset = PRESETS.find((p) => p.key === presetActive)
+          if (preset) {
+            const { unit, currentSizeKey, frame, wall } = get()
+            const panels = instantiatePreset(preset, currentSizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
+            set({ panels, image: { ...DEFAULT_IMAGE } })
+          }
+        }
+      },
+
+      setCurrentSizeKey: (key) => {
+        set({ currentSizeKey: key })
+        const { presetActive } = get()
+        if (presetActive) {
+          const preset = PRESETS.find((p) => p.key === presetActive)
+          if (preset) {
+            const { unit, gap, frame, wall } = get()
+            const panels = instantiatePreset(preset, key, unit, gap, frame.edgeWidth, wall.width, wall.height)
+            set({ panels, image: { ...DEFAULT_IMAGE } })
+          }
+        }
+      },
+
+      addPanel: () => {
+        const { panels, wall, unit, frame } = get()
+        if (panels.length >= 8) return
+        const [w, h] = defaultSize(unit)
+        const e = frame.edgeWidth
+        const innerX = (wall.width - w) / 2
+        const innerY = (wall.height - h) / 2
+        const panel: Panel = { id: makePanelId(), width: w, height: h, x: innerX, y: innerY, sizePreset: findPreset(unit, w, h) }
+        set({ panels: [...panels, panel], selectedId: panel.id, presetActive: null })
+      },
+
+      deletePanel: (id) => {
+        const { panels, selectedId, perPanelFrame } = get()
+        const next = panels.filter((p) => p.id !== id)
+        const nextPer = { ...perPanelFrame }
+        delete nextPer[id]
+        set({ panels: next, selectedId: selectedId === id ? null : selectedId, perPanelFrame: nextPer, presetActive: null })
+      },
+
+      selectPanel: (id) => set({ selectedId: id }),
+
+      updatePanel: (id, partial) => {
+        const { unit } = get()
+        set({
+          panels: get().panels.map((p) => {
+            if (p.id !== id) return p
+            const merged = { ...p, ...partial }
+            if (partial.width !== undefined || partial.height !== undefined) {
+              merged.sizePreset = findPreset(unit, merged.width, merged.height)
+            }
+            return merged
+          }),
+          presetActive: null,
+        })
+      },
+
+      setPanelSize: (id, w, h, presetKey) => {
+        const min = 10
+        const width = Math.max(min, w)
+        const height = Math.max(min, h)
+        set({
+          panels: get().panels.map((p) => (p.id === id ? { ...p, width, height, sizePreset: presetKey } : p)),
+          presetActive: null,
+        })
+      },
+
+      setPanelOuterPosition: (id, outerX, outerY) => {
+        const { frame, perPanelFrame, wall } = get()
+        const panel = get().panels.find((p) => p.id === id)
+        if (!panel) return
+        const f = resolveFrame(panel, frame, perPanelFrame)
+        const e = f.edgeWidth
+        const g = panelGeometry(panel, f)
+        let ox = outerX
+        let oy = outerY
+        if (ox < 0) ox = 0
+        if (oy < 0) oy = 0
+        if (ox + g.outer.w > wall.width) ox = wall.width - g.outer.w
+        if (oy + g.outer.h > wall.height) oy = wall.height - g.outer.h
+        set({
+          panels: get().panels.map((p) => (p.id === id ? { ...p, x: ox + e, y: oy + e } : p)),
+        })
+      },
+
+      orientPanel: (id) => {
+        set({
+          panels: get().panels.map((p) =>
+            p.id === id ? { ...p, width: p.height, height: p.width, sizePreset: findPreset(get().unit, p.height, p.width) } : p,
+          ),
+          presetActive: null,
+        })
+      },
+
+      setFrame: (partial) => {
+        const { frame, perPanelFrame, selectedId } = get()
+        if ('perPanel' in partial) {
+          set({ frame: { ...frame, ...partial } })
+          return
+        }
+        if (frame.perPanel && selectedId) {
+          const existing = perPanelFrame[selectedId] ?? {
+            edgeWidth: frame.edgeWidth,
+            colorKey: frame.colorKey,
+            customColor: frame.customColor,
+            matEnabled: frame.matEnabled,
+            matWidth: frame.matWidth,
+            matColorKey: frame.matColorKey,
+            matCustomColor: frame.matCustomColor,
+            shadow: frame.shadow,
+          }
+          set({ perPanelFrame: { ...perPanelFrame, [selectedId]: { ...existing, ...partial } } })
+        } else {
+          set({ frame: { ...frame, ...partial } })
+        }
+      },
+
+      resetFrameToGlobal: (id) => {
+        const { perPanelFrame } = get()
+        const next = { ...perPanelFrame }
+        delete next[id]
+        set({ perPanelFrame: next })
+      },
+
+      setImageMode: (mode) => set({ image: { ...get().image, mode } }),
+      setImageZoom: (z) => set({ image: { ...get().image, mode: 'custom', zoom: Math.max(1, Math.min(3, z)) } }),
+      setImagePan: (panX, panY) => set({ image: { ...get().image, mode: 'custom', panX, panY } }),
+      resetImage: () => set({ image: { ...DEFAULT_IMAGE } }),
+
+      setViewport: (partial) => set({ viewport: { ...get().viewport, ...partial } }),
+      toggleGrid: () => set({ showGrid: !get().showGrid }),
+      setPreview: (p) => set({ preview: p }),
+      setExportOpen: (o) => set({ exportOpen: o }),
+      setConfirmReset: (c) => set({ confirmReset: c }),
+      setChangeImageOpen: (c) => set({ changeImageOpen: c }),
+
+      resetProject: () =>
+        set({
+          panels: [],
+          selectedId: null,
+          perPanelFrame: {},
+          wall: { ...DEFAULT_WALL },
+          frame: { ...DEFAULT_FRAME },
+          image: { ...DEFAULT_IMAGE },
+          presetActive: null,
+          gap: 3,
+          viewport: { x: 0, y: 0, scale: 3 },
+          preview: false,
+          exportOpen: false,
+          confirmReset: false,
+        }),
+    }),
+    {
+      name: 'slice-my-photo-state',
+      partialize: (s) => ({
+        unit: s.unit,
+        wall: s.wall,
+        panels: s.panels,
+        selectedId: s.selectedId,
+        perPanelFrame: s.perPanelFrame,
+        frame: s.frame,
+        image: s.image,
+        presetActive: s.presetActive,
+        gap: s.gap,
+        currentSizeKey: s.currentSizeKey,
+        viewport: s.viewport,
+        showGrid: s.showGrid,
+      }),
+    },
+  ),
+)
+
+/** Compute the current image placement (scale + pan) from state. */
+export function useImagePlacement(): { scale: number; panX: number; panY: number } {
+  const panels = useStore((s) => s.panels)
+  const frame = useStore((s) => s.frame)
+  const perPanelFrame = useStore((s) => s.perPanelFrame)
+  const image = useStore((s) => s.image)
+  const sourceImage = useStore((s) => s.sourceImage)
+  return computeImagePlacement(panels, frame, perPanelFrame, image, sourceImage)
+}
+
+export function computeImagePlacement(
+  panels: Panel[],
+  frame: FrameStyle,
+  perPanelFrame: Record<string, PerPanelFrame>,
+  image: ImageTransform,
+  sourceImage: SourceImage | null,
+): { scale: number; panX: number; panY: number } {
+  if (!sourceImage || panels.length === 0) return { scale: 1, panX: 0, panY: 0 }
+  const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const g of geoms) {
+    minX = Math.min(minX, g.visible.x)
+    minY = Math.min(minY, g.visible.y)
+    maxX = Math.max(maxX, g.visible.x + g.visible.w)
+    maxY = Math.max(maxY, g.visible.y + g.visible.h)
+  }
+  const bbox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  const scale = imageScaleForMode(image.mode, bbox, sourceImage, image.zoom)
+  if (image.mode === 'custom') {
+    return { scale, panX: image.panX, panY: image.panY }
+  }
+  return { scale, ...defaultPan(bbox, scale, sourceImage) }
+}
+
+// ensure getPreset import is used (kept for potential external use)
+void getPreset
