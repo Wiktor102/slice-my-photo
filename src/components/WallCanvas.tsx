@@ -448,6 +448,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   ] as const
                 ).map((c) => {
                   const hs = 11 / scale
+                  const cursor = (c.key === 'tl' || c.key === 'br') ? 'nwse-resize' : 'nesw-resize'
                   return (
                     <Rect
                       key={c.key}
@@ -459,6 +460,8 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                       stroke="#4a7dff"
                       strokeWidth={1.5 / scale}
                       cornerRadius={2 / scale}
+                      onMouseEnter={() => { if (containerRef.current) containerRef.current.style.cursor = cursor }}
+                      onMouseLeave={() => { if (containerRef.current) containerRef.current.style.cursor = '' }}
                       onPointerDown={startCornerResize(c.key)}
                     />
                   )
