@@ -60,16 +60,19 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const preview = useStore((s) => s.preview)
   const sourceImage = useStore((s) => s.sourceImage)
   const zoomToFitToken = useStore((s) => s.zoomToFitToken)
+  const zoomToImageToken = useStore((s) => s.zoomToImageToken)
   const unit = useStore((s) => s.unit)
 
   const setViewport = useStore((s) => s.setViewport)
   const setImageTransform = useStore((s) => s.setImageTransform)
   const selectPanel = useStore((s) => s.selectPanel)
   const selectImage = useStore((s) => s.selectImage)
+  const setCanvasSize = useStore((s) => s.setCanvasSize)
 
   const placement = useImagePlacement()
   const spaceRef = useRef(false)
   const dragStartRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 })
+  const prevImageTokenRef = useRef(0)
   const imgResizeRef = useRef<{
     fx: number
     fy: number
@@ -97,6 +100,11 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     setSize({ w: el.clientWidth, h: el.clientHeight })
     return () => ro.disconnect()
   }, [])
+
+  // keep canvas size available for bottom-bar fit-state highlighting
+  useEffect(() => {
+    setCanvasSize(size)
+  }, [size, setCanvasSize])
 
   // load proxy image
   useEffect(() => {
@@ -128,6 +136,26 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     if (zoomToFitToken > 0 && size.w > 0 && size.h > 0) fit(size.w, size.h)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoomToFitToken])
+
+  const fitImage = (cw: number, ch: number) => {
+    const src = sourceImage
+    if (!src) return
+    const imgW = src.nativeWidth * placement.scale
+    const imgH = src.nativeHeight * placement.scale
+    if (imgW <= 0 || imgH <= 0) return
+    const s = Math.max(0.2, Math.min((cw - 2 * PAD) / imgW, (ch - 2 * PAD) / imgH))
+    const x = placement.panX - (cw / 2 / s - imgW / 2)
+    const y = placement.panY - (ch / 2 / s - imgH / 2)
+    setViewport({ x, y, scale: s })
+  }
+
+  useEffect(() => {
+    if (zoomToImageToken !== prevImageTokenRef.current && size.w > 0 && size.h > 0) {
+      prevImageTokenRef.current = zoomToImageToken
+      fitImage(size.w, size.h)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomToImageToken, size.w, size.h])
 
   // space-to-pan viewport
   useEffect(() => {

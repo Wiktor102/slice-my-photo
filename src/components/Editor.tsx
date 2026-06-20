@@ -18,6 +18,7 @@ export function Editor() {
   const setChangeImageOpen = useStore((s) => s.setChangeImageOpen)
   const clearImage = useStore((s) => s.clearImage)
   const requestZoomToFit = useStore((s) => s.requestZoomToFit)
+  const requestZoomToImage = useStore((s) => s.requestZoomToImage)
 
   return (
     <>
@@ -26,7 +27,7 @@ export function Editor() {
         <LeftSidebar />
         <WallCanvas />
         <RightSidebar />
-        <BottomBar onZoomToFit={requestZoomToFit} />
+        <BottomBar onZoomToFit={requestZoomToFit} onZoomToImage={requestZoomToImage} />
       </div>
 
       {preview && <PreviewMode />}

@@ -64,6 +64,13 @@ button.primary:hover:not(:disabled) {
   background: #5a8bff;
   border-color: #5a8bff;
 }
+button.fit-active {
+  cursor: default;
+}
+button.fit-active:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+}
 button.danger {
   border-color: #5a3535;
   color: #f0a59e;

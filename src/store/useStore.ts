@@ -44,6 +44,8 @@ interface State {
   confirmReset: boolean
   changeImageOpen: boolean
   zoomToFitToken: number
+  zoomToImageToken: number
+  canvasSize: { w: number; h: number }
 
   // actions
   setUnit: (u: Unit) => void
@@ -77,6 +79,8 @@ interface State {
 
   setViewport: (partial: Partial<Viewport>) => void
   requestZoomToFit: () => void
+  requestZoomToImage: () => void
+  setCanvasSize: (size: { w: number; h: number }) => void
   toggleGrid: () => void
   setPreview: (p: boolean) => void
   setExportOpen: (o: boolean) => void
@@ -139,6 +143,8 @@ export const useStore = create<State>()(
       confirmReset: false,
       changeImageOpen: false,
       zoomToFitToken: 0,
+      zoomToImageToken: 0,
+      canvasSize: { w: 0, h: 0 },
 
       setUnit: (u) => {
         const defaultKey = u === 'cm' ? 'cm-40x60' : 'in-16x20'
@@ -335,6 +341,8 @@ export const useStore = create<State>()(
 
       setViewport: (partial) => set({ viewport: { ...get().viewport, ...partial } }),
       requestZoomToFit: () => set({ zoomToFitToken: get().zoomToFitToken + 1 }),
+      requestZoomToImage: () => set({ zoomToImageToken: get().zoomToImageToken + 1 }),
+      setCanvasSize: (size) => set({ canvasSize: size }),
       toggleGrid: () => set({ showGrid: !get().showGrid }),
       setPreview: (p) => set({ preview: p }),
       setExportOpen: (o) => set({ exportOpen: o }),
