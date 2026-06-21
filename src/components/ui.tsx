@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { HexColorPicker } from 'react-colorful'
+import { PipetteIcon } from 'lucide-react'
 
 interface NumberFieldProps {
   label: string
@@ -46,26 +47,58 @@ export function Swatches({
   onCustomColor: (hex: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const presets = options.filter((o) => o.key !== 'custom')
+
+  // Click-outside: just close the picker. The colour is already committed
+  // live via HexColorPicker's onChange, so no commit needed here.
+  // Use pointerdown (not mousedown) because react-colorful calls
+  // preventDefault() on pointerdown, which can suppress mousedown.
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [open])
+
+  const handleCustomClick = () => {
+    if (value !== 'custom') {
+      // Switching into custom mode — set both colorKey AND customColor together
+      onCustomColor(customColor)
+      setOpen(true)
+    } else {
+      // Toggle the picker open/closed. Colour is already committed via onChange.
+      setOpen((o) => !o)
+    }
+  }
+
   return (
-    <div className="col" style={{ gap: 6 }}>
+    <div className="col" style={{ gap: 6 }} ref={wrapRef}>
       <div className="swatches">
-        {options.map((o) => (
+        {presets.map((o) => (
           <button
             key={o.key}
             className={`swatch ${value === o.key ? 'active' : ''}`}
             style={{ background: o.hex }}
             title={o.label}
-            onClick={() => onPick(o.key)}
+            onClick={() => { onPick(o.key); setOpen(false) }}
           />
         ))}
-        {value === 'custom' && (
-          <button
-            className={`swatch active`}
-            style={{ background: customColor }}
-            title="Custom"
-            onClick={() => setOpen((o) => !o)}
-          />
-        )}
+        <button
+          className={`swatch swatch-custom ${value === 'custom' ? 'active' : ''}`}
+          title="Custom color"
+          onClick={handleCustomClick}
+        >
+          {value === 'custom' ? (
+            <span className="swatch-custom-preview" style={{ background: customColor }} />
+          ) : (
+            <PipetteIcon size={14} strokeWidth={2.5} />
+          )}
+        </button>
       </div>
       {value === 'custom' && open && (
         <div style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>

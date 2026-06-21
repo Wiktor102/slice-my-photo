@@ -507,6 +507,23 @@ button.big { padding: 10px 16px; font-size: 15px; }
   padding: 0;
 }
 .swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.swatch-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00cc00, #0066ff, #8800ff, #ff0088, #ff0000) !important;
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0,0,0,.6);
+}
+.swatch-custom:hover { filter: brightness(1.15); }
+.swatch-custom-preview {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.7);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.3);
+}
 
 .toggle {
   display: inline-flex;

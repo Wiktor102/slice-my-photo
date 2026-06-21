@@ -209,7 +209,7 @@ export function RightSidebar() {
           )}
         </div>
         <CommitNumberField label="Frame edge width" value={displayFrame.edgeWidth} suffix={unit} min={0} max={20} step={0.5} onCommit={(v) => setFrame({ edgeWidth: v })} />
-        <label className="field"><span>Frame color</span>
+        <div className="field"><span>Frame color</span>
           <Swatches
             options={colorOptions}
             value={displayFrame.colorKey}
@@ -217,8 +217,8 @@ export function RightSidebar() {
             onPick={(k) => setFrame({ colorKey: k as never })}
             onCustomColor={(hex) => setFrame({ colorKey: 'custom', customColor: hex })}
           />
-        </label>
-        <label className="field"><span>Passepartout color</span>
+        </div>
+        <div className="field"><span>Passepartout color</span>
           <Swatches
             options={matColorOptions}
             value={displayMatKey}
@@ -238,7 +238,7 @@ export function RightSidebar() {
               }
             }}
           />
-        </label>
+        </div>
         <div style={{ marginTop: 8 }}>
           <Toggle on={displayFrame.shadow} onChange={(v) => setFrame({ shadow: v })} label="Drop shadow" />
         </div>
