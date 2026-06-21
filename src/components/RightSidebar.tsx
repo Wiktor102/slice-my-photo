@@ -2,7 +2,7 @@ import { useStore } from '../store/useStore'
 import { FRAME_SIZES, getPreset } from '../lib/frameSizes'
 import { FRAME_COLORS, MAT_COLORS } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
-import { CommitNumberField, NumberField, Segmented, Swatches, Toggle } from './ui'
+import { CommitNumberField, Segmented, Swatches, Toggle } from './ui'
 
 export function RightSidebar() {
   const unit = useStore((s) => s.unit)
@@ -41,8 +41,8 @@ export function RightSidebar() {
       <div className="card">
         <div className="section-title">Wall Setup</div>
         <div className="field-grid">
-          <NumberField label="Width" value={wall.width} onChange={(v) => setWall({ width: v })} min={10} step={1} suffix={unit} />
-          <NumberField label="Height" value={wall.height} onChange={(v) => setWall({ height: v })} min={10} step={1} suffix={unit} />
+          <CommitNumberField label="Width" value={wall.width} onCommit={(v) => setWall({ width: v })} min={10} step={1} suffix={unit} />
+          <CommitNumberField label="Height" value={wall.height} onCommit={(v) => setWall({ height: v })} min={10} step={1} suffix={unit} />
         </div>
         <label className="field">
           <span>Wall color</span>
