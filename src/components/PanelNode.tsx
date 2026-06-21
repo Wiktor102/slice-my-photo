@@ -48,12 +48,13 @@ export function PanelNode({
     if (tr && node) {
       if (selected) {
         tr.nodes([node])
+        tr.forceUpdate()
         tr.getLayer()?.batchDraw()
       } else {
         tr.nodes([])
       }
     }
-  }, [selected])
+  }, [selected, outer.x, outer.y, outer.w, outer.h])
 
   const handleDragMove = (ev: Konva.KonvaEventObject<DragEvent>) => {
     const node = ev.target as Konva.Group
