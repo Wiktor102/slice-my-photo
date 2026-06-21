@@ -15,9 +15,7 @@ export function TopBar() {
 
   return (
     <div className="topbar">
-      <div className="brand-mark small" aria-hidden>
-        <span /><span /><span />
-      </div>
+      <img className="brand-mark" src="/brand-mark.svg" alt="" aria-hidden />
       <span className="title">Slice My Photo</span>
       <button className="ghost" onClick={() => setChangeImageOpen(true)}><ImageIcon size={14} />Change Image</button>
       <button

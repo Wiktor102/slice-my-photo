@@ -221,17 +221,9 @@ label {
   font-size: 13px;
 }
 .brand-mark {
-  display: flex;
-  gap: 4px;
+  width: 50px;
+  height: 32px;
 }
-.brand-mark span {
-  width: 14px;
-  height: 28px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent), #6a5bff);
-}
-.brand-mark span:nth-child(2) { height: 22px; opacity: 0.8; }
-.brand-mark span:nth-child(3) { height: 32px; opacity: 0.6; }
 
 .dropzone {
   border: 2px dashed var(--border);

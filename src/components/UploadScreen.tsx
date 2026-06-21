@@ -51,11 +51,7 @@ export function UploadScreen() {
     <div className="upload-screen" onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
       <div className="upload-card">
         <div className="brand">
-          <div className="brand-mark" aria-hidden>
-            <span />
-            <span />
-            <span />
-          </div>
+          <img className="brand-mark" src="/brand-mark.svg" alt="" aria-hidden />
           <h1>Slice My Photo</h1>
           <p className="brand-sub">Split one photo across a wall of framed panels.</p>
         </div>
