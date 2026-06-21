@@ -306,7 +306,6 @@ label {
   display: flex;
   align-items: center;
   gap: 16px;
-  justify-content: center;
 }
 .upload-units label {
   cursor: pointer;
@@ -403,6 +402,7 @@ button.big { padding: 10px 16px; font-size: 15px; }
   flex-direction: column;
   gap: 4px;
   margin-bottom: 8px;
+  align-items: flex-start;
 }
 .field:last-child { margin-bottom: 0; }
 .field label {
