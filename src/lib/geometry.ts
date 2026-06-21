@@ -1,4 +1,4 @@
-import type { FrameStyle, ImageTransform, Panel, PerPanelFrame, Rect, SnapLines, SourceImage, Unit } from '../types'
+import type { FrameStyle, ImageTransform, Panel, PerPanelFrame, Rect, SnapGuide, SourceImage, Unit } from '../types'
 import { legacyPassepartout, MIN_OPENING_SIZE, normalizePassepartout } from './passepartout'
 
 export const CM_PER_INCH = 2.54
@@ -164,57 +164,287 @@ export function panelsOverlap(geoms: PanelGeometry[], index: number): boolean {
 
 export const SNAP_TOLERANCE_PX = 6
 
-export function computeSnaps(
-  moving: Panel,
-  movingFrame: PerPanelFrame,
-  others: { panel: Panel; frame: PerPanelFrame }[],
-  screenScale: number,
-): { snap: SnapLines; offsetX: number; offsetY: number } {
-  const tol = SNAP_TOLERANCE_PX / screenScale
-  const mg = panelGeometry(moving, movingFrame)
-  const movingCenters = {
-    vx: [mg.outer.x, mg.outer.x + mg.outer.w / 2, mg.outer.x + mg.outer.w],
-    hy: [mg.outer.y, mg.outer.y + mg.outer.h / 2, mg.outer.y + mg.outer.h],
-  }
-  const vertical: number[] = []
-  const horizontal: number[] = []
-  let offsetX = 0
-  let offsetY = 0
-  let bestVDist = tol + 1
-  let bestHDist = tol + 1
+/** Colors used for the different guide flavors. */
+export const SNAP_COLOR_ALIGN = '#e070ff'
+export const SNAP_COLOR_GAP = '#3fb960'
+export const SNAP_COLOR_MID = '#e0a84b'
+export const SNAP_COLOR_WALL = '#9a9aa8'
 
-  for (const { panel, frame } of others) {
-    const g = panelGeometry(panel, frame)
-    const targets = {
-      vx: [g.outer.x, g.outer.x + g.outer.w / 2, g.outer.x + g.outer.w],
-      hy: [g.outer.y, g.outer.y + g.outer.h / 2, g.outer.y + g.outer.h],
-    }
-    for (let mi = 0; mi < 3; mi++) {
-      for (let ti = 0; ti < 3; ti++) {
-        const d = targets.vx[ti] - movingCenters.vx[mi]
-        if (Math.abs(d) < bestVDist) {
-          bestVDist = Math.abs(d)
-          offsetX = d
-          vertical.push(targets.vx[ti])
-        }
+export type SnapKind = 'align' | 'gap' | 'mid' | 'wall'
+
+export interface SnapContext {
+  moving: Panel
+  movingFrame: PerPanelFrame
+  others: { panel: Panel; frame: PerPanelFrame }[]
+  /** screen pixels per world unit */
+  screenScale: number
+  wall: { width: number; height: number }
+  /** when false, gap + midpoint assists are disabled (alignment + wall still work) */
+  gapSnapEnabled: boolean
+  /** fallback target gap (e.g. the store gap) when no gap can be detected from others */
+  fallbackGap: number
+}
+
+export interface SnapResult {
+  vertical: SnapGuide[]
+  horizontal: SnapGuide[]
+  offsetX: number
+  offsetY: number
+  kindX: SnapKind | null
+  kindY: SnapKind | null
+  /** the gap value (world units) actually used on each axis, when a gap snap fired */
+  gapX: number | null
+  gapY: number | null
+}
+
+interface SnapCandidate {
+  offset: number
+  dist: number
+  guides: SnapGuide[]
+  kind: SnapKind
+  /** tie-breaker: higher wins when dist is ~equal */
+  priority: number
+  /** gap value used, for gap-kind candidates */
+  gap?: number
+}
+
+/**
+ * Detect the dominant inter-panel gap along an axis by clustering nearby gaps.
+ * Returns null when no aligned panel pairs exist.
+ */
+function detectDominantGap(geoms: Rect[], axis: 'x' | 'y'): number | null {
+  const gaps: number[] = []
+  for (let i = 0; i < geoms.length; i++) {
+    for (let j = i + 1; j < geoms.length; j++) {
+      const a = geoms[i]
+      const b = geoms[j]
+      if (axis === 'x') {
+        const yOverlap = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
+        if (yOverlap <= 0) continue
+        if (a.x + a.w <= b.x + 1e-6) gaps.push(b.x - (a.x + a.w))
+        else if (b.x + b.w <= a.x + 1e-6) gaps.push(a.x - (b.x + b.w))
+      } else {
+        const xOverlap = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+        if (xOverlap <= 0) continue
+        if (a.y + a.h <= b.y + 1e-6) gaps.push(b.y - (a.y + a.h))
+        else if (b.y + b.h <= a.y + 1e-6) gaps.push(a.y - (b.y + b.h))
       }
     }
-    for (let mi = 0; mi < 3; mi++) {
-      for (let ti = 0; ti < 3; ti++) {
-        const d = targets.hy[ti] - movingCenters.hy[mi]
-        if (Math.abs(d) < bestHDist) {
-          bestHDist = Math.abs(d)
-          offsetY = d
-          horizontal.push(targets.hy[ti])
+  }
+  if (gaps.length === 0) return null
+  gaps.sort((a, b) => a - b)
+  const CLUSTER = 0.5
+  let bestCount = 1
+  let bestAvg = gaps[0]
+  let curCount = 1
+  let curSum = gaps[0]
+  for (let i = 1; i < gaps.length; i++) {
+    if (gaps[i] - gaps[i - 1] <= CLUSTER) {
+      curCount++
+      curSum += gaps[i]
+    } else {
+      if (curCount > bestCount) {
+        bestCount = curCount
+        bestAvg = curSum / curCount
+      }
+      curCount = 1
+      curSum = gaps[i]
+    }
+  }
+  if (curCount > bestCount) bestAvg = curSum / curCount
+  return Math.max(0, bestAvg)
+}
+
+export function computeSnaps(ctx: SnapContext): SnapResult {
+  const { moving, movingFrame, others, screenScale, wall, gapSnapEnabled, fallbackGap } = ctx
+  const tolAlign = SNAP_TOLERANCE_PX / screenScale
+  const tolGap = (SNAP_TOLERANCE_PX + 4) / screenScale
+  const tolMid = (SNAP_TOLERANCE_PX + 6) / screenScale
+  const tolWall = SNAP_TOLERANCE_PX / screenScale
+
+  const mg = panelGeometry(moving, movingFrame)
+  const m = mg.outer
+  const mLeft = m.x
+  const mCx = m.x + m.w / 2
+  const mRight = m.x + m.w
+  const mTop = m.y
+  const mCy = m.y + m.h / 2
+  const mBottom = m.y + m.h
+
+  const otherGeoms = others.map((o) => panelGeometry(o.panel, o.frame).outer)
+
+  const targetGapX = detectDominantGap(otherGeoms, 'x') ?? Math.max(0, fallbackGap)
+  const targetGapY = detectDominantGap(otherGeoms, 'y') ?? Math.max(0, fallbackGap)
+
+  const xCands: SnapCandidate[] = []
+  const yCands: SnapCandidate[] = []
+
+  const pushCand = (arr: SnapCandidate[], c: SnapCandidate) => arr.push(c)
+
+  for (const o of otherGeoms) {
+    // --- alignment: edges + centers ---
+    const tEdges = [o.x, o.x + o.w / 2, o.x + o.w]
+    const tTops = [o.y, o.y + o.h / 2, o.y + o.h]
+    for (const mv of [mLeft, mCx, mRight]) {
+      for (const tv of tEdges) {
+        const d = tv - mv
+        const dist = Math.abs(d)
+        if (dist <= tolAlign) pushCand(xCands, { offset: d, dist, guides: [{ pos: tv, color: SNAP_COLOR_ALIGN }], kind: 'align', priority: 0 })
+      }
+    }
+    for (const mv of [mTop, mCy, mBottom]) {
+      for (const tv of tTops) {
+        const d = tv - mv
+        const dist = Math.abs(d)
+        if (dist <= tolAlign) pushCand(yCands, { offset: d, dist, guides: [{ pos: tv, color: SNAP_COLOR_ALIGN }], kind: 'align', priority: 0 })
+      }
+    }
+
+    if (gapSnapEnabled) {
+      // --- gap snap (X): place moving at targetGapX from this neighbor ---
+      const rightSnap = o.x + o.w + targetGapX // moving.left when moving sits to the right
+      const leftSnap = o.x - targetGapX // moving.right when moving sits to the left
+      const dR = rightSnap - mLeft
+      const dL = leftSnap - mRight
+      if (Math.abs(dR) <= tolGap)
+        pushCand(xCands, {
+          offset: dR,
+          dist: Math.abs(dR),
+          guides: [{ pos: rightSnap, color: SNAP_COLOR_GAP }, { pos: o.x + o.w, color: SNAP_COLOR_GAP }],
+          kind: 'gap',
+          priority: 1,
+          gap: targetGapX,
+        })
+      if (Math.abs(dL) <= tolGap)
+        pushCand(xCands, {
+          offset: dL,
+          dist: Math.abs(dL),
+          guides: [{ pos: leftSnap, color: SNAP_COLOR_GAP }, { pos: o.x, color: SNAP_COLOR_GAP }],
+          kind: 'gap',
+          priority: 1,
+          gap: targetGapX,
+        })
+      // --- gap snap (Y) ---
+      const belowSnap = o.y + o.h + targetGapY
+      const aboveSnap = o.y - targetGapY
+      const dB = belowSnap - mTop
+      const dA = aboveSnap - mBottom
+      if (Math.abs(dB) <= tolGap)
+        pushCand(yCands, {
+          offset: dB,
+          dist: Math.abs(dB),
+          guides: [{ pos: belowSnap, color: SNAP_COLOR_GAP }, { pos: o.y + o.h, color: SNAP_COLOR_GAP }],
+          kind: 'gap',
+          priority: 1,
+          gap: targetGapY,
+        })
+      if (Math.abs(dA) <= tolGap)
+        pushCand(yCands, {
+          offset: dA,
+          dist: Math.abs(dA),
+          guides: [{ pos: aboveSnap, color: SNAP_COLOR_GAP }, { pos: o.y, color: SNAP_COLOR_GAP }],
+          kind: 'gap',
+          priority: 1,
+          gap: targetGapY,
+        })
+    }
+  }
+
+  // --- midpoint / equal-gap snap between two neighbors ---
+  if (gapSnapEnabled && otherGeoms.length >= 2) {
+    for (let i = 0; i < otherGeoms.length; i++) {
+      for (let j = i + 1; j < otherGeoms.length; j++) {
+        const a = otherGeoms[i]
+        const b = otherGeoms[j]
+        // X: center moving between a and b horizontally (requires vertical overlap)
+        const yOverlap = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
+        if (yOverlap > 0) {
+          const left = a.x < b.x ? a : b
+          const right = a.x < b.x ? b : a
+          const spaceL = left.x + left.w
+          const spaceR = right.x
+          const space = spaceR - spaceL
+          if (space >= m.w - 1e-6) {
+            const targetLeft = spaceL + (space - m.w) / 2
+            const d = targetLeft - mLeft
+            if (Math.abs(d) <= tolMid)
+              pushCand(xCands, {
+                offset: d,
+                dist: Math.abs(d),
+                guides: [{ pos: targetLeft, color: SNAP_COLOR_MID }, { pos: targetLeft + m.w, color: SNAP_COLOR_MID }],
+                kind: 'mid',
+                priority: 2,
+              })
+          }
+        }
+        // Y midpoint
+        const xOverlap = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+        if (xOverlap > 0) {
+          const top = a.y < b.y ? a : b
+          const bottom = a.y < b.y ? b : a
+          const spaceT = top.y + top.h
+          const spaceB = bottom.y
+          const space = spaceB - spaceT
+          if (space >= m.h - 1e-6) {
+            const targetTop = spaceT + (space - m.h) / 2
+            const d = targetTop - mTop
+            if (Math.abs(d) <= tolMid)
+              pushCand(yCands, {
+                offset: d,
+                dist: Math.abs(d),
+                guides: [{ pos: targetTop, color: SNAP_COLOR_MID }, { pos: targetTop + m.h, color: SNAP_COLOR_MID }],
+                kind: 'mid',
+                priority: 2,
+              })
+          }
         }
       }
     }
   }
+
+  // --- wall center + wall edges ---
+  {
+    const xWall: { d: number; pos: number }[] = [
+      { d: wall.width / 2 - mCx, pos: wall.width / 2 },
+      { d: 0 - mLeft, pos: 0 },
+      { d: wall.width - mRight, pos: wall.width },
+    ]
+    for (const c of xWall) {
+      if (Math.abs(c.d) <= tolWall)
+        pushCand(xCands, { offset: c.d, dist: Math.abs(c.d), guides: [{ pos: c.pos, color: SNAP_COLOR_WALL }], kind: 'wall', priority: 0 })
+    }
+    const yWall: { d: number; pos: number }[] = [
+      { d: wall.height / 2 - mCy, pos: wall.height / 2 },
+      { d: 0 - mTop, pos: 0 },
+      { d: wall.height - mBottom, pos: wall.height },
+    ]
+    for (const c of yWall) {
+      if (Math.abs(c.d) <= tolWall)
+        pushCand(yCands, { offset: c.d, dist: Math.abs(c.d), guides: [{ pos: c.pos, color: SNAP_COLOR_WALL }], kind: 'wall', priority: 0 })
+    }
+  }
+
+  const pickBest = (cands: SnapCandidate[]): { offset: number; guides: SnapGuide[]; kind: SnapKind | null; gap: number | null } => {
+    if (cands.length === 0) return { offset: 0, guides: [], kind: null, gap: null }
+    let best = cands[0]
+    for (const c of cands) {
+      if (c.dist < best.dist - 1e-9 || (Math.abs(c.dist - best.dist) <= 1e-9 && c.priority > best.priority)) best = c
+    }
+    return { offset: best.offset, guides: best.guides, kind: best.kind, gap: best.gap ?? null }
+  }
+
+  const bx = pickBest(xCands)
+  const by = pickBest(yCands)
 
   return {
-    snap: { vertical, horizontal },
-    offsetX: bestVDist <= tol ? offsetX : 0,
-    offsetY: bestHDist <= tol ? offsetY : 0,
+    vertical: bx.guides,
+    horizontal: by.guides,
+    offsetX: bx.offset,
+    offsetY: by.offset,
+    kindX: bx.kind,
+    kindY: by.kind,
+    gapX: bx.gap,
+    gapY: by.gap,
   }
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Maximize2Icon, CropIcon, Grid3x3Icon } from 'lucide-react'
+import { Maximize2Icon, CropIcon, Grid3x3Icon, MagnetIcon } from 'lucide-react'
 import { useStore, useImagePlacement } from '../store/useStore'
 
 const PAD = 48
@@ -16,6 +16,8 @@ interface Props {
 export function BottomBar({ onZoomToFit, onZoomToImage }: Props) {
   const showGrid = useStore((s) => s.showGrid)
   const toggleGrid = useStore((s) => s.toggleGrid)
+  const gapSnapEnabled = useStore((s) => s.gapSnapEnabled)
+  const toggleGapSnap = useStore((s) => s.toggleGapSnap)
   const viewport = useStore((s) => s.viewport)
   const setViewport = useStore((s) => s.setViewport)
   const unit = useStore((s) => s.unit)
@@ -69,6 +71,13 @@ export function BottomBar({ onZoomToFit, onZoomToImage }: Props) {
     <div className="bottombar">
       <div className="spacer" />
       <button className={showGrid ? 'primary' : ''} onClick={toggleGrid}><Grid3x3Icon size={13} />Toggle grid</button>
+      <button
+        className={gapSnapEnabled ? 'primary' : ''}
+        onClick={toggleGapSnap}
+        title={gapSnapEnabled ? 'Gap snapping on — drag a frame near another to match the existing gap, or between two frames to center it.' : 'Gap snapping off'}
+      >
+        <MagnetIcon size={13} />Gap snapping
+      </button>
       <button className={isFitWall ? 'primary fit-active' : ''} onClick={onZoomToFit}><Maximize2Icon size={13} />Fit to wall</button>
       <button className={isFitImage ? 'primary fit-active' : ''} onClick={onZoomToImage} disabled={!hasImage}><CropIcon size={13} />Fit to image</button>
       <span className="zoom-control" ref={zoomRef}>

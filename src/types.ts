@@ -115,9 +115,16 @@ export interface Rect {
   h: number
 }
 
+export interface SnapGuide {
+  /** world coordinate of the guide line */
+  pos: number
+  /** stroke color for the guide line */
+  color: string
+}
+
 export interface SnapLines {
-  vertical: number[]
-  horizontal: number[]
+  vertical: SnapGuide[]
+  horizontal: SnapGuide[]
 }
 
 export interface SavedLayout {

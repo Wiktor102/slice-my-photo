@@ -42,6 +42,7 @@ interface State {
 
   viewport: Viewport
   showGrid: boolean
+  gapSnapEnabled: boolean
   preview: boolean
   exportOpen: boolean
   confirmReset: boolean
@@ -89,6 +90,7 @@ interface State {
   requestZoomToImage: () => void
   setCanvasSize: (size: { w: number; h: number }) => void
   toggleGrid: () => void
+  toggleGapSnap: () => void
   setPreview: (p: boolean) => void
   setExportOpen: (o: boolean) => void
   setConfirmReset: (c: boolean) => void
@@ -170,6 +172,7 @@ export const useStore = create<State>()(
 
       viewport: { x: 0, y: 0, scale: 3 },
       showGrid: true,
+      gapSnapEnabled: true,
       preview: false,
       exportOpen: false,
       confirmReset: false,
@@ -493,6 +496,7 @@ export const useStore = create<State>()(
       requestZoomToImage: () => set({ zoomToImageToken: get().zoomToImageToken + 1 }),
       setCanvasSize: (size) => set({ canvasSize: size }),
       toggleGrid: () => set({ showGrid: !get().showGrid }),
+      toggleGapSnap: () => set({ gapSnapEnabled: !get().gapSnapEnabled }),
       setPreview: (p) => set({ preview: p }),
       setExportOpen: (o) => set({ exportOpen: o }),
       setConfirmReset: (c) => set({ confirmReset: c }),
@@ -559,6 +563,7 @@ export const useStore = create<State>()(
         currentSizeKey: s.currentSizeKey,
         viewport: s.viewport,
         showGrid: s.showGrid,
+        gapSnapEnabled: s.gapSnapEnabled,
       }),
     },
   ),

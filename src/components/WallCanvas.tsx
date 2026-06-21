@@ -474,11 +474,11 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
           {/* snap guides (span visible range) */}
           {!isPreview && snapLines && (
             <Group listening={false}>
-              {snapLines.vertical.map((x, i) => (
-                <Line key={`sv${i}`} points={[sx(x), 0, sx(x), size.h]} stroke="#e070ff" strokeWidth={1} dash={[4, 4]} />
+              {snapLines.vertical.map((g, i) => (
+                <Line key={`sv${i}`} points={[sx(g.pos), 0, sx(g.pos), size.h]} stroke={g.color} strokeWidth={1} dash={[4, 4]} />
               ))}
-              {snapLines.horizontal.map((y, i) => (
-                <Line key={`sh${i}`} points={[0, sy(y), size.w, sy(y)]} stroke="#e070ff" strokeWidth={1} dash={[4, 4]} />
+              {snapLines.horizontal.map((g, i) => (
+                <Line key={`sh${i}`} points={[0, sy(g.pos), size.w, sy(g.pos)]} stroke={g.color} strokeWidth={1} dash={[4, 4]} />
               ))}
             </Group>
           )}

@@ -2,8 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Group, Rect, Transformer, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { Panel, PerPanelFrame, SourceImage } from '../types'
-import { panelGeometry } from '../lib/geometry'
-import { computeSnaps } from '../lib/geometry'
+import { panelGeometry, computeSnaps } from '../lib/geometry'
 import { frameHex, matHex } from '../lib/frameColors'
 import { useStore } from '../store/useStore'
 import type { SnapLines } from '../types'
@@ -61,16 +60,32 @@ export function PanelNode({
     let ox = node.x()
     let oy = node.y()
     const movingPanel: Panel = { ...panel, x: ox + e, y: oy + e }
-    const { snap, offsetX, offsetY } = computeSnaps(movingPanel, frame, others, viewportScale)
-    ox += offsetX
-    oy += offsetY
-    const wall = useStore.getState().wall
+    const st = useStore.getState()
+    const res = computeSnaps({
+      moving: movingPanel,
+      movingFrame: frame,
+      others,
+      screenScale: viewportScale,
+      wall: st.wall,
+      gapSnapEnabled: st.gapSnapEnabled,
+      fallbackGap: st.gap,
+    })
+    ox += res.offsetX
+    oy += res.offsetY
+    const wall = st.wall
     ox = Math.max(0, Math.min(ox, wall.width - outer.w))
     oy = Math.max(0, Math.min(oy, wall.height - outer.h))
     node.x(ox)
     node.y(oy)
-    setSnapLines(snap)
-    setTip(`X ${Math.round(ox * 10) / 10}, Y ${Math.round(oy * 10) / 10}`)
+    setSnapLines({ vertical: res.vertical, horizontal: res.horizontal })
+    const unit = st.unit
+    const parts: string[] = [`X ${Math.round(ox * 10) / 10}, Y ${Math.round(oy * 10) / 10}`]
+    const fmtGap = (g: number) => (Math.round(g * 10) / 10).toString()
+    if (res.kindX === 'gap' && res.gapX != null) parts.push(`gap ${fmtGap(res.gapX)} ${unit}`)
+    else if (res.kindX === 'mid') parts.push('centered')
+    if (res.kindY === 'gap' && res.gapY != null) parts.push(`gap ${fmtGap(res.gapY)} ${unit}`)
+    else if (res.kindY === 'mid') parts.push('centered')
+    setTip(parts.join(' · '))
     setPanelOuterPosition(panel.id, ox, oy)
   }
 
