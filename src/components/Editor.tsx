@@ -15,12 +15,12 @@ export function Editor() {
   const preview = useStore((s) => s.preview)
   const exportOpen = useStore((s) => s.exportOpen)
   const confirmReset = useStore((s) => s.confirmReset)
-  const changeImageOpen = useStore((s) => s.changeImageOpen)
+  const homeOpen = useStore((s) => s.homeOpen)
   const saveLayoutOpen = useStore((s) => s.saveLayoutOpen)
   const loadLayoutOpen = useStore((s) => s.loadLayoutOpen)
   const resetProject = useStore((s) => s.resetProject)
   const setConfirmReset = useStore((s) => s.setConfirmReset)
-  const setChangeImageOpen = useStore((s) => s.setChangeImageOpen)
+  const setHomeOpen = useStore((s) => s.setHomeOpen)
   const clearImage = useStore((s) => s.clearImage)
   const requestZoomToFit = useStore((s) => s.requestZoomToFit)
   const requestZoomToImage = useStore((s) => s.requestZoomToImage)
@@ -50,13 +50,13 @@ export function Editor() {
         onCancel={() => setConfirmReset(false)}
       />
       <ConfirmDialog
-        open={changeImageOpen}
-        title="Change image?"
+        open={homeOpen}
+        title="Return home?"
         body="This will remove the current image and all panels, returning you to the upload screen."
-        confirmLabel="Change image"
+        confirmLabel="Go home"
         destructive
-        onConfirm={() => { setChangeImageOpen(false); clearImage() }}
-        onCancel={() => setChangeImageOpen(false)}
+        onConfirm={() => { setHomeOpen(false); clearImage() }}
+        onCancel={() => setHomeOpen(false)}
       />
     </>
   )

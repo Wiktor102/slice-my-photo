@@ -1,15 +1,21 @@
-import { ImageIcon, SaveIcon, FolderOpenIcon, RotateCcwIcon, EyeIcon, EyeOffIcon, DownloadIcon } from 'lucide-react'
+import { useRef } from 'react'
+import { ImageIcon, SaveIcon, FolderOpenIcon, RotateCcwIcon, EyeIcon, EyeOffIcon, DownloadIcon, HomeIcon } from 'lucide-react'
 import { useStore } from '../store/useStore'
+
+const ACCEPT = 'image/jpeg,image/png,image/webp'
 
 export function TopBar() {
   const setConfirmReset = useStore((s) => s.setConfirmReset)
   const setPreview = useStore((s) => s.setPreview)
   const setExportOpen = useStore((s) => s.setExportOpen)
-  const setChangeImageOpen = useStore((s) => s.setChangeImageOpen)
+  const setHomeOpen = useStore((s) => s.setHomeOpen)
   const setSaveLayoutOpen = useStore((s) => s.setSaveLayoutOpen)
   const setLoadLayoutOpen = useStore((s) => s.setLoadLayoutOpen)
+  const loadImageFromFile = useStore((s) => s.loadImageFromFile)
   const preview = useStore((s) => s.preview)
   const panels = useStore((s) => s.panels)
+
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const canSave = panels.length > 0
 
@@ -17,7 +23,9 @@ export function TopBar() {
     <div className="topbar">
       <img className="brand-mark" src="/brand-mark.svg" alt="" aria-hidden />
       <span className="title">Slice My Photo</span>
-      <button className="ghost" onClick={() => setChangeImageOpen(true)}><ImageIcon size={14} />Change Image</button>
+      <button className="ghost" onClick={() => setHomeOpen(true)}><HomeIcon size={14} />Home</button>
+      <button className="ghost" onClick={() => inputRef.current?.click()}><ImageIcon size={14} />Change Image</button>
+      <input ref={inputRef} type="file" accept={ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) loadImageFromFile(f); e.target.value = '' }} />
       <button
         className="ghost"
         disabled={!canSave}

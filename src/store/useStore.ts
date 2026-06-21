@@ -43,7 +43,7 @@ interface State {
   preview: boolean
   exportOpen: boolean
   confirmReset: boolean
-  changeImageOpen: boolean
+  homeOpen: boolean
   saveLayoutOpen: boolean
   loadLayoutOpen: boolean
   toast: string | null
@@ -89,7 +89,7 @@ interface State {
   setPreview: (p: boolean) => void
   setExportOpen: (o: boolean) => void
   setConfirmReset: (c: boolean) => void
-  setChangeImageOpen: (c: boolean) => void
+  setHomeOpen: (c: boolean) => void
   setSaveLayoutOpen: (o: boolean) => void
   setLoadLayoutOpen: (o: boolean) => void
   showToast: (msg: string) => void
@@ -149,7 +149,7 @@ export const useStore = create<State>()(
       preview: false,
       exportOpen: false,
       confirmReset: false,
-      changeImageOpen: false,
+      homeOpen: false,
       saveLayoutOpen: false,
       loadLayoutOpen: false,
       toast: null,
@@ -358,7 +358,7 @@ export const useStore = create<State>()(
       setPreview: (p) => set({ preview: p }),
       setExportOpen: (o) => set({ exportOpen: o }),
       setConfirmReset: (c) => set({ confirmReset: c }),
-      setChangeImageOpen: (c) => set({ changeImageOpen: c }),
+      setHomeOpen: (c) => set({ homeOpen: c }),
       setSaveLayoutOpen: (o) => set({ saveLayoutOpen: o }),
       setLoadLayoutOpen: (o) => set({ loadLayoutOpen: o }),
       showToast: (msg) => {
