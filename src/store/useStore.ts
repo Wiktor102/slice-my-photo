@@ -212,7 +212,16 @@ export const useStore = create<State>()(
 
       clearImage: async () => {
         await idbClearImage()
-        set({ sourceImage: null, screen: 'upload', panels: [], selectedId: null, imageSelected: false, perPanelFrame: {}, image: { ...DEFAULT_IMAGE } })
+        set({
+          sourceImage: null,
+          screen: 'upload',
+          panels: [],
+          selectedId: null,
+          imageSelected: false,
+          perPanelFrame: {},
+          frame: { ...get().frame, perPanel: false },
+          image: { ...DEFAULT_IMAGE },
+        })
       },
 
       setScreen: (s) => set({ screen: s }),
@@ -234,7 +243,14 @@ export const useStore = create<State>()(
         const { unit, currentSizeKey, gap, frame, wall } = get()
         const panels = instantiatePreset(preset, currentSizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
           .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
-        set({ panels, presetActive: key, selectedId: null, perPanelFrame: {}, image: { ...DEFAULT_IMAGE } })
+        set({
+          panels,
+          presetActive: key,
+          selectedId: null,
+          perPanelFrame: {},
+          frame: { ...frame, perPanel: false },
+          image: { ...DEFAULT_IMAGE },
+        })
       },
 
       setGap: (g) => {
@@ -278,16 +294,32 @@ export const useStore = create<State>()(
       },
 
       deletePanel: (id) => {
-        const { panels, selectedId, perPanelFrame } = get()
+        const { panels, selectedId, perPanelFrame, frame } = get()
         const next = panels.filter((p) => p.id !== id)
         const nextPer = { ...perPanelFrame }
         delete nextPer[id]
-        set({ panels: next, selectedId: selectedId === id ? null : selectedId, perPanelFrame: nextPer, presetActive: null })
+        const wasSelected = selectedId === id
+        const updates: Partial<State> = {
+          panels: next,
+          selectedId: wasSelected ? null : selectedId,
+          perPanelFrame: nextPer,
+          presetActive: null,
+        }
+        if (wasSelected) updates.frame = { ...frame, perPanel: false }
+        set(updates)
       },
 
-      selectPanel: (id) => set({ selectedId: id, imageSelected: false }),
+      selectPanel: (id) => {
+        const updates: Partial<State> = { selectedId: id, imageSelected: false }
+        if (!id) updates.frame = { ...get().frame, perPanel: false }
+        set(updates)
+      },
 
-      selectImage: (b) => set({ imageSelected: b, selectedId: b ? null : get().selectedId }),
+      selectImage: (b) => {
+        const updates: Partial<State> = { imageSelected: b, selectedId: b ? null : get().selectedId }
+        if (b) updates.frame = { ...get().frame, perPanel: false }
+        set(updates)
+      },
 
       updatePanel: (id, partial) => {
         const { unit } = get()
@@ -442,7 +474,7 @@ export const useStore = create<State>()(
           unit: layout.unit,
           wall: { ...layout.wall },
           panels: layout.panels.map((p) => ({ ...p, passepartout: normalizePassepartout(p, layout.frame) })),
-          frame: { ...layout.frame },
+          frame: { ...layout.frame, perPanel: false },
           perPanelFrame: { ...layout.perPanelFrame },
           gap: layout.gap,
           currentSizeKey: layout.currentSizeKey,

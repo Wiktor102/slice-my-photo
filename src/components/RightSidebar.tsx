@@ -200,7 +200,10 @@ export function RightSidebar() {
         <div className="section-title">Frame Style</div>
         <div className="row" style={{ marginBottom: 10 }}>
           <Segmented
-            options={[{ key: 'all', label: 'Apply to all' }, { key: 'panel', label: 'Selected only' }]}
+            options={[
+              { key: 'all', label: 'Apply to all' },
+              { key: 'panel', label: 'Selected only', disabled: !selectedId },
+            ]}
             value={frame.perPanel ? 'panel' : 'all'}
             onChange={(v) => setFrame({ perPanel: v === 'panel' })}
           />

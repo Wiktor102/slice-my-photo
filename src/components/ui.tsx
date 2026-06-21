@@ -132,14 +132,19 @@ export function Segmented({
   value,
   onChange,
 }: {
-  options: { key: string; label: string }[]
+  options: { key: string; label: string; disabled?: boolean }[]
   value: string
   onChange: (v: string) => void
 }) {
   return (
     <div className="seg">
       {options.map((o) => (
-        <button key={o.key} className={value === o.key ? 'active' : ''} onClick={() => onChange(o.key)}>
+        <button
+          key={o.key}
+          className={value === o.key ? 'active' : ''}
+          disabled={o.disabled}
+          onClick={() => onChange(o.key)}
+        >
           {o.label}
         </button>
       ))}

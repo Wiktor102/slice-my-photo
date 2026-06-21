@@ -571,6 +571,13 @@ button.big { padding: 10px 16px; font-size: 15px; }
   background: var(--accent);
   color: white;
 }
+.seg button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.seg button:disabled:hover {
+  background: #1d1d23;
+}
 
 /* Modal */
 .modal-overlay {
