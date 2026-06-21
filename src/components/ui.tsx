@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { HexColorPicker } from 'react-colorful'
 import { PipetteIcon } from 'lucide-react'
+import { WALL_COLORS } from '../lib/frameColors'
 
 interface NumberFieldProps {
   label: string
@@ -103,6 +104,66 @@ export function Swatches({
       {value === 'custom' && open && (
         <div style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>
           <HexColorPicker color={customColor} onChange={onCustomColor} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function WallColorPicker({
+  color,
+  onChange,
+}: {
+  color: string
+  onChange: (color: string) => void
+}) {
+  const [customOpen, setCustomOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const presets = WALL_COLORS
+
+  useEffect(() => {
+    if (!customOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setCustomOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [customOpen])
+
+  const isCustom = !presets.some((p) => p.hex === color)
+
+  return (
+    <div className="col" style={{ gap: 6 }} ref={wrapRef}>
+      <div className="wall-color-preview" style={{ background: color }}>
+        <span className="wall-color-hex">{color}</span>
+      </div>
+      <div className="swatches">
+        {presets.map((p) => (
+          <button
+            key={p.key}
+            className={`swatch ${color === p.hex ? 'active' : ''}`}
+            style={{ background: p.hex }}
+            title={p.label}
+            onClick={() => { onChange(p.hex); setCustomOpen(false) }}
+          />
+        ))}
+        <button
+          className={`swatch swatch-custom ${isCustom ? 'active' : ''}`}
+          title="Custom color"
+          onClick={() => { setCustomOpen((o) => !o) }}
+        >
+          {isCustom ? (
+            <span className="swatch-custom-preview" style={{ background: color }} />
+          ) : (
+            <PipetteIcon size={14} strokeWidth={2.5} />
+          )}
+        </button>
+      </div>
+      {customOpen && (
+        <div style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>
+          <HexColorPicker color={color} onChange={onChange} />
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@ import { FRAME_SIZES, getPreset } from '../lib/frameSizes'
 import { FRAME_COLORS, MAT_COLORS } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
 import { suggestedOpening } from '../lib/passepartout'
-import { CommitNumberField, Segmented, Swatches, Toggle } from './ui'
+import { CommitNumberField, Segmented, Swatches, Toggle, WallColorPicker } from './ui'
 
 export function RightSidebar() {
   const unit = useStore((s) => s.unit)
@@ -49,10 +49,10 @@ export function RightSidebar() {
           <CommitNumberField label="Width" value={wall.width} onCommit={(v) => setWall({ width: v })} min={10} step={1} suffix={unit} />
           <CommitNumberField label="Height" value={wall.height} onCommit={(v) => setWall({ height: v })} min={10} step={1} suffix={unit} />
         </div>
-        <label className="field">
+        <div className="field">
           <span>Wall color</span>
-          <input type="color" value={wall.color} onChange={(e) => setWall({ color: e.target.value })} style={{ width: '100%', height: 32, padding: 0, background: 'none' }} />
-        </label>
+          <WallColorPicker color={wall.color} onChange={(c) => setWall({ color: c })} />
+        </div>
       </div>
 
       {selected && selFrame && selGeom && (

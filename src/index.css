@@ -492,6 +492,26 @@ button.big { padding: 10px 16px; font-size: 15px; }
   padding: 16px 8px;
 }
 
+/* wall color preview */
+.wall-color-preview {
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 3px 5px;
+}
+.wall-color-hex {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: monospace;
+  letter-spacing: 0.05em;
+}
+
 /* color swatches */
 .swatches {
   display: flex;
