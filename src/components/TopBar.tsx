@@ -1,3 +1,4 @@
+import { ImageIcon, SaveIcon, FolderOpenIcon, RotateCcwIcon, EyeIcon, EyeOffIcon, DownloadIcon } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 export function TopBar() {
@@ -18,22 +19,23 @@ export function TopBar() {
         <span /><span /><span />
       </div>
       <span className="title">Slice My Photo</span>
-      <button className="ghost" onClick={() => setChangeImageOpen(true)}>Change Image</button>
+      <button className="ghost" onClick={() => setChangeImageOpen(true)}><ImageIcon size={14} />Change Image</button>
       <button
         className="ghost"
         disabled={!canSave}
         title={canSave ? undefined : 'Add at least one panel before saving.'}
         onClick={() => setSaveLayoutOpen(true)}
       >
-        Save Layout
+        <SaveIcon size={14} />Save Layout
       </button>
-      <button className="ghost" onClick={() => setLoadLayoutOpen(true)}>Load Layout</button>
+      <button className="ghost" onClick={() => setLoadLayoutOpen(true)}><FolderOpenIcon size={14} />Load Layout</button>
       <div className="spacer" />
-      <button onClick={() => setConfirmReset(true)}>Reset</button>
+      <button onClick={() => setConfirmReset(true)}><RotateCcwIcon size={14} />Reset</button>
       <button className={preview ? 'primary' : ''} onClick={() => setPreview(!preview)}>
+        {preview ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
         {preview ? 'Exit Preview' : 'Preview'}
       </button>
-      <button className="primary" onClick={() => setExportOpen(true)}>Export</button>
+      <button className="primary" onClick={() => setExportOpen(true)}><DownloadIcon size={14} />Export</button>
     </div>
   )
 }
