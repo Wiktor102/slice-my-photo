@@ -3,6 +3,7 @@ import { FRAME_SIZES, getPreset } from '../lib/frameSizes'
 import { FRAME_COLORS, MAT_COLORS } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
 import { suggestedOpening } from '../lib/passepartout'
+import { ArrowLeftRightIcon } from 'lucide-react'
 import { CommitNumberField, Segmented, Swatches, Toggle, WallColorPicker } from './ui'
 
 export function RightSidebar() {
@@ -60,47 +61,52 @@ export function RightSidebar() {
           <div className="section-title">Panel Properties</div>
           <label className="field">
             <span>Size preset</span>
-            <select value={selected.sizePreset} onChange={(e) => {
-              const key = e.target.value
-              if (key === 'custom') { updatePanel(selected.id, { sizePreset: 'custom' }); return }
-              const p = getPreset(unit, key)
-              if (p) setPanelSize(selected.id, p.w, p.h, key)
-            }}>
-              {sizePresetOptions.map((p) => (
-                <option key={p.key} value={p.key}>{p.label}</option>
-              ))}
-              <option value="custom">Custom</option>
-            </select>
+            <div className="row" style={{ width: '100%' }}>
+              <select value={selected.sizePreset} onChange={(e) => {
+                const key = e.target.value
+                if (key === 'custom') { updatePanel(selected.id, { sizePreset: 'custom' }); return }
+                const p = getPreset(unit, key)
+                if (p) setPanelSize(selected.id, p.w, p.h, key)
+              }} style={{ flex: 1 }}>
+                {sizePresetOptions.map((p) => (
+                  <option key={p.key} value={p.key}>{p.label}</option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+              <button title="Swap orientation" onClick={() => orientPanel(selected.id)}><ArrowLeftRightIcon size={16} /></button>
+            </div>
           </label>
-          <div className="field-grid">
-            <CommitNumberField
-              label="Width"
-              value={selected.width}
-              suffix={unit}
-              min={10}
-              disabled={selected.sizePreset !== 'custom'}
-              onCommit={(v) => {
-                if (selected.lockAspect) {
-                  const ratio = selected.height / selected.width
-                  setPanelSize(selected.id, v, v * ratio, 'custom')
-                } else setPanelSize(selected.id, v, selected.height, 'custom')
-              }}
-            />
-            <CommitNumberField
-              label="Height"
-              value={selected.height}
-              suffix={unit}
-              min={10}
-              disabled={selected.sizePreset !== 'custom'}
-              onCommit={(v) => {
-                if (selected.lockAspect) {
-                  const ratio = selected.width / selected.height
-                  setPanelSize(selected.id, v * ratio, v, 'custom')
-                } else setPanelSize(selected.id, selected.width, v, 'custom')
-              }}
-            />
-          </div>
-          <Toggle on={!!selected.lockAspect} onChange={(v) => updatePanel(selected.id, { lockAspect: v })} label="Lock aspect ratio" />
+          {selected.sizePreset === 'custom' && (
+            <>
+              <div className="field-grid">
+                <CommitNumberField
+                  label="Width"
+                  value={selected.width}
+                  suffix={unit}
+                  min={10}
+                  onCommit={(v) => {
+                    if (selected.lockAspect) {
+                      const ratio = selected.height / selected.width
+                      setPanelSize(selected.id, v, v * ratio, 'custom')
+                    } else setPanelSize(selected.id, v, selected.height, 'custom')
+                  }}
+                />
+                <CommitNumberField
+                  label="Height"
+                  value={selected.height}
+                  suffix={unit}
+                  min={10}
+                  onCommit={(v) => {
+                    if (selected.lockAspect) {
+                      const ratio = selected.width / selected.height
+                      setPanelSize(selected.id, v * ratio, v, 'custom')
+                    } else setPanelSize(selected.id, selected.width, v, 'custom')
+                  }}
+                />
+              </div>
+              <Toggle on={!!selected.lockAspect} onChange={(v) => updatePanel(selected.id, { lockAspect: v })} label="Lock aspect ratio" />
+            </>
+          )}
           <div className="field-grid" style={{ marginTop: 8 }}>
             <CommitNumberField
               label="X (outer)"
@@ -188,7 +194,6 @@ export function RightSidebar() {
             </div>
           )}
           <div className="row" style={{ marginTop: 8 }}>
-            <button onClick={() => orientPanel(selected.id)}>↻ Swap Orientation</button>
             <div className="spacer" />
             <button className="danger" onClick={() => deletePanel(selected.id)}>Delete</button>
           </div>
