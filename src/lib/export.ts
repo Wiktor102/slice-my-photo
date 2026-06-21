@@ -119,7 +119,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
         innerX: g.inner.x, innerY: g.inner.y, innerW: g.inner.w, innerH: g.inner.h,
         visX: g.visible.x, visY: g.visible.y, visW: g.visible.w, visH: g.visible.h,
         frameColor: frameHex(f.colorKey, f.customColor),
-        matColor: f.matEnabled ? matHex(f.matColorKey, f.matCustomColor) : null,
+        matColor: f.passepartout.enabled ? matHex(f.passepartout.colorKey, f.passepartout.customColor) : null,
         shadow: f.shadow,
         number: i + 1,
       }
@@ -293,7 +293,8 @@ export function buildMeasurementsPdf(): jsPDF {
   const legendY = pageH - margin - 6
   pdf.setFontSize(8)
   pdf.setTextColor(60)
-  const matNote = frame.matEnabled ? `Mat: ${frame.matWidth} ${u}` : 'No mat'
+  const matCount = panels.filter((panel) => resolveFrame(panel, frame, perPanelFrame).passepartout.enabled).length
+  const matNote = matCount > 0 ? `Passepartout: ${matCount} panel${matCount === 1 ? '' : 's'}` : 'No passepartout'
   pdf.text(`Frame edge: ${frame.edgeWidth} ${u}   |   ${matNote}   |   Panels: ${panels.length}`, margin, legendY)
   return pdf
 }

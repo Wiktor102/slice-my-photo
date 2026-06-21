@@ -415,6 +415,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   frame={resolveFrame(p, frame, perPanelFrame)}
                   selected={!isPreview && selectedId === p.id}
                   image={imageEl}
+                  sourceImage={sourceImage}
                   scale={placement.scale}
                   panX={placement.panX}
                   panY={placement.panY}

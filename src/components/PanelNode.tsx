@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Group, Rect, Transformer, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
-import type { Panel, PerPanelFrame } from '../types'
+import type { Panel, PerPanelFrame, SourceImage } from '../types'
 import { panelGeometry } from '../lib/geometry'
 import { computeSnaps } from '../lib/geometry'
 import { frameHex, matHex } from '../lib/frameColors'
@@ -13,6 +13,7 @@ interface Props {
   frame: PerPanelFrame
   selected: boolean
   image: HTMLImageElement | undefined
+  sourceImage: SourceImage | null
   scale: number
   panX: number
   panY: number
@@ -24,7 +25,7 @@ interface Props {
 }
 
 export function PanelNode({
-  panel, frame, selected, image, scale, panX, panY, others, viewportScale, showLabel, setSnapLines, setTip,
+  panel, frame, selected, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, setSnapLines, setTip,
 }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -37,9 +38,9 @@ export function PanelNode({
   const inner = geom.inner
   const visible = geom.visible
   const e = frame.edgeWidth
-  const m = frame.matEnabled ? frame.matWidth : 0
+  const mat = frame.passepartout
   const frameColor = frameHex(frame.colorKey, frame.customColor)
-  const matColor = matHex(frame.matColorKey, frame.matCustomColor)
+  const matColor = matHex(mat.colorKey, mat.customColor)
 
   useEffect(() => {
     const tr = trRef.current
@@ -113,12 +114,14 @@ export function PanelNode({
   }
 
   // source-pixel crop for the visible region
-  const cropX = (visible.x - panX) / scale
-  const cropY = (visible.y - panY) / scale
-  const cropW = visible.w / scale
-  const cropH = visible.h / scale
-  const visLocalX = e + m
-  const visLocalY = e + m
+  const previewScaleX = image && sourceImage ? image.naturalWidth / sourceImage.nativeWidth : 1
+  const previewScaleY = image && sourceImage ? image.naturalHeight / sourceImage.nativeHeight : 1
+  const cropX = ((visible.x - panX) / scale) * previewScaleX
+  const cropY = ((visible.y - panY) / scale) * previewScaleY
+  const cropW = (visible.w / scale) * previewScaleX
+  const cropH = (visible.h / scale) * previewScaleY
+  const visLocalX = visible.x - outer.x
+  const visLocalY = visible.y - outer.y
 
   return (
     <>
@@ -145,7 +148,7 @@ export function PanelNode({
           shadowOpacity={frame.shadow ? 0.35 : 0}
           shadowForStrokeEnabled={false}
         />
-        {frame.matEnabled && (
+        {mat.enabled && (
           <Rect x={e} y={e} width={inner.w} height={inner.h} fill={matColor} />
         )}
         <Rect x={visLocalX} y={visLocalY} width={visible.w} height={visible.h} fill="#ffffff" listening={false} />

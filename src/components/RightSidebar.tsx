@@ -2,6 +2,7 @@ import { useStore } from '../store/useStore'
 import { FRAME_SIZES, getPreset } from '../lib/frameSizes'
 import { FRAME_COLORS, MAT_COLORS } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
+import { suggestedOpening } from '../lib/passepartout'
 import { CommitNumberField, Segmented, Swatches, Toggle } from './ui'
 
 export function RightSidebar() {
@@ -21,6 +22,7 @@ export function RightSidebar() {
   const deletePanel = useStore((s) => s.deletePanel)
   const setFrame = useStore((s) => s.setFrame)
   const resetFrameToGlobal = useStore((s) => s.resetFrameToGlobal)
+  const updatePassepartout = useStore((s) => s.updatePassepartout)
   const setImageMode = useStore((s) => s.setImageMode)
   const setImageZoom = useStore((s) => s.setImageZoom)
   const resetImage = useStore((s) => s.resetImage)
@@ -32,9 +34,13 @@ export function RightSidebar() {
   const sizePresetOptions = FRAME_SIZES[unit]
   // Frame section shows the selected panel's resolved frame when in per-panel mode.
   const displayFrame = frame.perPanel && selFrame ? selFrame : frame
+  const passepartout = selFrame?.passepartout ?? null
+  const oneSizeSmaller = selected ? suggestedOpening(selected) : null
 
   const colorOptions = Object.entries(FRAME_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? displayFrame.customColor : v.hex }))
-  const matColorOptions = Object.entries(MAT_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? displayFrame.matCustomColor : v.hex }))
+  const displayMatKey = frame.perPanel && selFrame ? selFrame.passepartout.colorKey : frame.matColorKey
+  const displayMatCustom = frame.perPanel && selFrame ? selFrame.passepartout.customColor : frame.matCustomColor
+  const matColorOptions = Object.entries(MAT_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? displayMatCustom : v.hex }))
 
   return (
     <aside className="sidebar right">
@@ -110,6 +116,78 @@ export function RightSidebar() {
               onCommit={(v) => setPanelOuterPosition(selected.id, selGeom.outer.x, v)}
             />
           </div>
+          {passepartout && (
+            <div className="panel-subsection">
+              <div className="mini-title">Passepartout</div>
+              <Toggle on={passepartout.enabled} onChange={(v) => updatePassepartout(selected.id, { enabled: v })} label="Use passepartout" />
+              {passepartout.enabled && (
+                <div className="col" style={{ marginTop: 8 }}>
+                  <Segmented
+                    options={[
+                      { key: 'opening', label: 'Opening size' },
+                      { key: 'inset', label: 'Even inset' },
+                      { key: 'margins', label: 'Margins' },
+                    ]}
+                    value={passepartout.mode}
+                    onChange={(v) => updatePassepartout(selected.id, { mode: v as never })}
+                  />
+                  {passepartout.mode === 'opening' && (
+                    <>
+                      <div className="field-grid">
+                        <CommitNumberField
+                          label="Opening width"
+                          value={passepartout.openingWidth}
+                          suffix={unit}
+                          min={1}
+                          max={selected.width}
+                          step={0.5}
+                          onCommit={(v) => updatePassepartout(selected.id, { openingWidth: v })}
+                        />
+                        <CommitNumberField
+                          label="Opening height"
+                          value={passepartout.openingHeight}
+                          suffix={unit}
+                          min={1}
+                          max={selected.height}
+                          step={0.5}
+                          onCommit={(v) => updatePassepartout(selected.id, { openingHeight: v })}
+                        />
+                      </div>
+                      {oneSizeSmaller && (
+                        <button
+                          className="ghost"
+                          title="Set the opening to the next smaller common frame size"
+                          onClick={() => updatePassepartout(selected.id, { mode: 'opening', openingWidth: oneSizeSmaller.w, openingHeight: oneSizeSmaller.h })}
+                        >
+                          Use {oneSizeSmaller.w} × {oneSizeSmaller.h} {unit} opening
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {passepartout.mode === 'inset' && (
+                    <CommitNumberField
+                      label="Inset"
+                      value={passepartout.inset}
+                      suffix={unit}
+                      min={0}
+                      max={Math.max(0, Math.min(selected.width, selected.height) / 2)}
+                      step={0.5}
+                      onCommit={(v) => updatePassepartout(selected.id, { inset: v })}
+                    />
+                  )}
+                  {passepartout.mode === 'margins' && (
+                    <div className="field-grid">
+                      <CommitNumberField label="Top" value={passepartout.marginTop} suffix={unit} min={0} step={0.5} onCommit={(v) => updatePassepartout(selected.id, { marginTop: v })} />
+                      <CommitNumberField label="Right" value={passepartout.marginRight} suffix={unit} min={0} step={0.5} onCommit={(v) => updatePassepartout(selected.id, { marginRight: v })} />
+                      <CommitNumberField label="Bottom" value={passepartout.marginBottom} suffix={unit} min={0} step={0.5} onCommit={(v) => updatePassepartout(selected.id, { marginBottom: v })} />
+                      <CommitNumberField label="Left" value={passepartout.marginLeft} suffix={unit} min={0} step={0.5} onCommit={(v) => updatePassepartout(selected.id, { marginLeft: v })} />
+                    </div>
+                  )}
+
+                </div>
+              )}
+            </div>
+          )}
           <div className="row" style={{ marginTop: 8 }}>
             <button onClick={() => orientPanel(selected.id)}>↻ Swap Orientation</button>
             <div className="spacer" />
@@ -140,23 +218,27 @@ export function RightSidebar() {
             onCustomColor={(hex) => setFrame({ colorKey: 'custom', customColor: hex })}
           />
         </label>
-        <div style={{ marginTop: 8 }}>
-          <Toggle on={displayFrame.matEnabled} onChange={(v) => setFrame({ matEnabled: v })} label="Mat / passepartout" />
-        </div>
-        {displayFrame.matEnabled && (
-          <>
-            <CommitNumberField label="Mat width" value={displayFrame.matWidth} suffix={unit} min={1} max={5} step={0.5} onCommit={(v) => setFrame({ matWidth: v })} />
-            <label className="field"><span>Mat color</span>
-              <Swatches
-                options={matColorOptions}
-                value={displayFrame.matColorKey}
-                customColor={displayFrame.matCustomColor}
-                onPick={(k) => setFrame({ matColorKey: k as never })}
-                onCustomColor={(hex) => setFrame({ matColorKey: 'custom', matCustomColor: hex })}
-              />
-            </label>
-          </>
-        )}
+        <label className="field"><span>Passepartout color</span>
+          <Swatches
+            options={matColorOptions}
+            value={displayMatKey}
+            customColor={displayMatCustom}
+            onPick={(k) => {
+              if (frame.perPanel && selected) {
+                updatePassepartout(selected.id, { colorKey: k as never })
+              } else {
+                setFrame({ matColorKey: k as never })
+              }
+            }}
+            onCustomColor={(hex) => {
+              if (frame.perPanel && selected) {
+                updatePassepartout(selected.id, { colorKey: 'custom', customColor: hex })
+              } else {
+                setFrame({ matColorKey: 'custom', matCustomColor: hex })
+              }
+            }}
+          />
+        </label>
         <div style={{ marginTop: 8 }}>
           <Toggle on={displayFrame.shadow} onChange={(v) => setFrame({ shadow: v })} label="Drop shadow" />
         </div>

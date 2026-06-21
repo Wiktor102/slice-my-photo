@@ -14,6 +14,22 @@ export type MatColorKey = 'white' | 'offwhite' | 'black' | 'custom'
 
 export type ImageMode = 'fill' | 'fit' | 'custom'
 
+export type PassepartoutMode = 'inset' | 'opening' | 'margins'
+
+export interface PassepartoutSettings {
+  enabled: boolean
+  mode: PassepartoutMode
+  inset: number
+  openingWidth: number
+  openingHeight: number
+  marginTop: number
+  marginRight: number
+  marginBottom: number
+  marginLeft: number
+  colorKey: MatColorKey
+  customColor: string
+}
+
 export interface Panel {
   id: string
   /** inner image-area width (unit) */
@@ -28,6 +44,8 @@ export interface Panel {
   sizePreset: string
   /** lock aspect ratio when resizing via numeric fields */
   lockAspect?: boolean
+  /** per-frame mat / passepartout settings */
+  passepartout?: PassepartoutSettings
 }
 
 export interface FrameStyle {
@@ -47,11 +65,13 @@ export interface PerPanelFrame {
   edgeWidth: number
   colorKey: FrameColorKey
   customColor: string
-  matEnabled: boolean
-  matWidth: number
-  matColorKey: MatColorKey
-  matCustomColor: string
   shadow: boolean
+  passepartout: PassepartoutSettings
+  /** legacy mat fields kept for older saved layouts */
+  matEnabled?: boolean
+  matWidth?: number
+  matColorKey?: MatColorKey
+  matCustomColor?: string
 }
 
 export interface WallSetup {

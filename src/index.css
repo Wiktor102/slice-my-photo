@@ -409,6 +409,16 @@ button.big { padding: 10px 16px; font-size: 15px; }
   font-size: 11px;
   color: var(--text-dim);
 }
+.panel-subsection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.mini-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
 
 .preset-grid {
   display: grid;

@@ -1,5 +1,6 @@
 import type { Panel, Unit } from '../types'
 import { getPreset } from './frameSizes'
+import { defaultPassepartout } from './passepartout'
 
 export interface PresetCell {
   col: number
@@ -74,13 +75,15 @@ export function instantiatePreset(
     const innerW = outerW - 2 * edgeWidth
     const innerH = outerH - 2 * edgeWidth
     const isBase = cell.colSpan === 1 && cell.rowSpan === 1
+    const sizePreset = isBase ? baseSizeKey : 'custom'
     panels.push({
       id: makePanelId(),
       width: innerW,
       height: innerH,
       x: innerX,
       y: innerY,
-      sizePreset: isBase ? baseSizeKey : 'custom',
+      sizePreset,
+      passepartout: defaultPassepartout({ width: innerW, height: innerH, sizePreset }),
     })
     minX = Math.min(minX, outerX)
     minY = Math.min(minY, outerY)

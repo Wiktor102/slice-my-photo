@@ -1,4 +1,5 @@
 import type { FrameStyle, ImageTransform, Panel, PerPanelFrame, Rect, SnapLines, SourceImage, Unit } from '../types'
+import { legacyPassepartout, MIN_OPENING_SIZE, normalizePassepartout } from './passepartout'
 
 export const CM_PER_INCH = 2.54
 export const BASE_DPI = 300
@@ -20,26 +21,75 @@ export interface PanelGeometry {
 }
 
 export function resolveFrame(panel: Panel, global: FrameStyle, perPanel: Record<string, PerPanelFrame>): PerPanelFrame {
-  if (global.perPanel && perPanel[panel.id]) return perPanel[panel.id]
+  const override = global.perPanel ? perPanel[panel.id] : undefined
+  if (override) {
+    return {
+      ...override,
+      passepartout: normalizePassepartout(panel, override),
+    }
+  }
+  const pp = normalizePassepartout(panel, global)
+  pp.colorKey = global.matColorKey ?? pp.colorKey
+  pp.customColor = global.matCustomColor ?? pp.customColor
   return {
     edgeWidth: global.edgeWidth,
     colorKey: global.colorKey,
     customColor: global.customColor,
-    matEnabled: global.matEnabled,
-    matWidth: global.matWidth,
-    matColorKey: global.matColorKey,
-    matCustomColor: global.matCustomColor,
     shadow: global.shadow,
+    passepartout: pp,
   }
 }
 
 export function panelGeometry(panel: Panel, frame: PerPanelFrame): PanelGeometry {
   const e = frame.edgeWidth
-  const m = frame.matEnabled ? frame.matWidth : 0
   const inner: Rect = { x: panel.x, y: panel.y, w: panel.width, h: panel.height }
   const outer: Rect = { x: inner.x - e, y: inner.y - e, w: inner.w + 2 * e, h: inner.h + 2 * e }
-  const visible: Rect = { x: inner.x + m, y: inner.y + m, w: inner.w - 2 * m, h: inner.h - 2 * m }
+  const mat = frame.passepartout ?? legacyPassepartout(panel, frame)
+  const visible = visibleRect(inner, mat.enabled ? mat : { ...mat, enabled: false })
   return { inner, outer, visible }
+}
+
+function clampMax(value: number, max: number): number {
+  return Math.max(0, Math.min(value, max))
+}
+
+function visibleRect(inner: Rect, mat: PerPanelFrame['passepartout']): Rect {
+  if (!mat.enabled) return { ...inner }
+
+  if (mat.mode === 'opening') {
+    const w = Math.max(MIN_OPENING_SIZE, Math.min(mat.openingWidth, inner.w))
+    const h = Math.max(MIN_OPENING_SIZE, Math.min(mat.openingHeight, inner.h))
+    return {
+      x: inner.x + (inner.w - w) / 2,
+      y: inner.y + (inner.h - h) / 2,
+      w,
+      h,
+    }
+  }
+
+  if (mat.mode === 'margins') {
+    const maxW = Math.max(0, inner.w - MIN_OPENING_SIZE)
+    const left = clampMax(mat.marginLeft, maxW)
+    const right = clampMax(mat.marginRight, Math.max(0, maxW - left))
+    const maxH = Math.max(0, inner.h - MIN_OPENING_SIZE)
+    const top = clampMax(mat.marginTop, maxH)
+    const bottom = clampMax(mat.marginBottom, Math.max(0, maxH - top))
+    return {
+      x: inner.x + left,
+      y: inner.y + top,
+      w: Math.max(MIN_OPENING_SIZE, inner.w - left - right),
+      h: Math.max(MIN_OPENING_SIZE, inner.h - top - bottom),
+    }
+  }
+
+  const insetX = clampMax(mat.inset, Math.max(0, (inner.w - MIN_OPENING_SIZE) / 2))
+  const insetY = clampMax(mat.inset, Math.max(0, (inner.h - MIN_OPENING_SIZE) / 2))
+  return {
+    x: inner.x + insetX,
+    y: inner.y + insetY,
+    w: Math.max(MIN_OPENING_SIZE, inner.w - 2 * insetX),
+    h: Math.max(MIN_OPENING_SIZE, inner.h - 2 * insetY),
+  }
 }
 
 export function boundingBox(geoms: PanelGeometry[]): Rect | null {
