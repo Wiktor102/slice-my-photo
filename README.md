@@ -1,73 +1,37 @@
-# React + TypeScript + Vite
+# Slice My Photo
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[English](#slice-my-photo-1) | Polski
 
-Currently, two official plugins are available:
+**Slice My Photo** to webowe narzędzie do projektowania obrazów dzielonych na wiele paneli, które pozwala rozłożyć pojedyncze zdjęcie na kilka oprawionych ramkami segmentów, zaplanować ich układ na wirtualnej ścianie i wyeksportować pliki gotowe do druku. Niezależnie od tego, czy chcesz stworzyć klasyczny tryptyk, symetryczną siatkę, czy całkowicie dowolny układ, narzędzie daje Ci pełną kontrolę nad każdym szczegółem.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Wczytaj zdjęcie, ustaw wymiary ściany i dodaj do ośmiu paneli. Wybierz jeden z gotowych układów, takich jak dyptyk, tryptyk lub zestaw panoramiczny, albo rozmieść panele swobodnie z inteligentnym przyciąganiem. Każdy panel może mieć własny styl ramki — wybierz jeden z siedmiu gotowych kolorów lub ustaw własny, dostosuj szerokość ramki i włącz cień. Passepartout można skonfigurować dla każdego panelu osobno, wybierając dokładny wymiar otwarcia, równomierne wcięcie lub niezależne marginesy z każdej strony.
 
-## React Compiler
+Gdy wszystko jest już na swoim miejscu, ustaw obraz w każdym panelu w jednym z trzech trybów: dopasuj całe zdjęcie, wypełnij ramkę z przycięciem lub przeciągnij i skaluj ręcznie. Eksport pakuje każdy panel jako wysokiej rozdzielczości JPEG lub PNG, generuje wizualizację całej ściany i tworzy plik PDF ze wszystkimi wymiarami – gotowy do wydruku lub oprawienia.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Projekt został zbudowany z użyciem React 19, TypeScript i Vite. Renderowanie na canvasie obsługuje Konva.js, stan aplikacji zarządzany jest przez Zustand, a zadania eksportu działają poza głównym wątkiem dzięki Web Workerom. Dane sesji są przechowywane w localStorage i IndexedDB, więc możesz odświeżyć stronę i kontynuować dokładnie w miejscu, w którym skończyłeś.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Slice My Photo
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+English | [Polski](#slice-my-photo)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+**Slice My Photo** is a web-based wall art panel designer that lets you split a single photograph across multiple framed panels, plan the arrangement on a virtual wall, and export print-ready files. Whether you want a classic triptych, a symmetrical grid, or a completely custom layout, the tool gives you full control over every detail.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Upload an image, configure your wall dimensions, and add up to eight panels. Choose from preset layouts like a diptych, triptych, or a panoramic set, or arrange panels freely with smart snapping guides. Each panel can have its own frame style — pick from seven preset colors or set a custom one, adjust the frame width, and toggle a drop shadow. The passepartout (mat) can be configured per panel with either an exact opening size, a uniform inset, or independent margins on each side.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Once everything is in place, position the image within each panel in one of three modes: fit the whole image, fill the frame with cropping, or drag and scale manually. The export tool packages every panel as a high-resolution JPEG or PNG, generates a visualization of the full wall, and produces a PDF with all measurements clearly labeled — ready for printing or framing.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The project is built with React 19, TypeScript, and Vite. Canvas rendering is handled by Konva.js, state is managed with Zustand, and export tasks run off the main thread using Web Workers. Session data persists in localStorage and IndexedDB, so you can reload the page and pick up right where you left off.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Development
+
+Install the dependencies with `npm install`, then start the development server with `npm run dev`. The application opens at `http://localhost:5173`. To create a production build, run `npm run build` — the output lands in the `dist/` directory and can be previewed locally with `npm run preview`.
+
+Run `npm run lint` to check the code with ESLint. A Playwright smoke test is available under `scripts/smoke.mjs` — it uploads a test image, applies a preset, adjusts styling, exports a ZIP, and verifies session persistence. Before running it, make sure Playwright browsers are installed with `npx playwright install chromium`.
+
+**Contributions are welcome**.
+
+### Tech stack
+
+React 19, TypeScript 6, Vite 8, Konva.js, Zustand 5, JSZip, jsPDF, Lucide React, react-colorful, Playwright.
