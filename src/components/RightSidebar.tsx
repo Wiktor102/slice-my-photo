@@ -25,7 +25,6 @@ export function RightSidebar() {
   const updatePassepartout = useStore((s) => s.updatePassepartout)
   const setImageMode = useStore((s) => s.setImageMode)
   const setImageZoom = useStore((s) => s.setImageZoom)
-  const resetImage = useStore((s) => s.resetImage)
 
   const selected = panels.find((p) => p.id === selectedId) ?? null
   const selFrame = selected ? resolveFrame(selected, frame, perPanelFrame) : null
@@ -252,20 +251,24 @@ export function RightSidebar() {
         <div className="row" style={{ marginBottom: 8 }}>
           <button className={image.mode === 'fit' ? 'primary' : ''} onClick={() => setImageMode('fit')}>Fit</button>
           <button className={image.mode === 'fill' ? 'primary' : ''} onClick={() => setImageMode('fill')}>Fill</button>
-          <button onClick={resetImage}>Reset</button>
+          <button className={image.mode === 'custom' ? 'primary' : ''} onClick={() => setImageMode('custom')}>Manual</button>
         </div>
-        <label className="field">
-          <span>Zoom {image.mode === 'custom' ? `(${image.zoom.toFixed(2)}× fit)` : ''}</span>
-          <input
-            type="range"
-            min={1}
-            max={3}
-            step={0.01}
-            value={image.mode === 'custom' ? image.zoom : 1}
-            onChange={(e) => setImageZoom(Number(e.target.value))}
-          />
-        </label>
-        <div className="hint">Click the image on the canvas to select it, then drag to reposition or drag a corner handle to zoom proportionally. Drag empty canvas to pan the view (hold Space to pan over the image).</div>
+        {image.mode === 'custom' && (
+          <label className="field">
+            <span>Zoom ({image.zoom.toFixed(2)}× fit)</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.01}
+              value={image.zoom}
+              onChange={(e) => setImageZoom(Number(e.target.value))}
+            />
+          </label>
+        )}
+        {image.mode === 'custom' && (
+          <div className="hint">Drag the image on canvas to reposition, or drag corner handles to resize.</div>
+        )}
       </div>
     </aside>
   )

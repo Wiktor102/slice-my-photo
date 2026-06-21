@@ -447,7 +447,42 @@ export const useStore = create<State>()(
       },
 
       setImageMode: (mode) => set({ image: { ...get().image, mode } }),
-      setImageZoom: (z) => set({ image: { ...get().image, mode: 'custom', zoom: Math.max(1, Math.min(3, z)) } }),
+      setImageZoom: (z) =>
+        set((state) => {
+          const newZoom = Math.max(1, Math.min(3, z))
+          const { image, panels, frame, perPanelFrame } = state
+          const bbox = (() => {
+            if (panels.length === 0) return null
+            const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+            for (const g of geoms) {
+              minX = Math.min(minX, g.visible.x)
+              minY = Math.min(minY, g.visible.y)
+              maxX = Math.max(maxX, g.visible.x + g.visible.w)
+              maxY = Math.max(maxY, g.visible.y + g.visible.h)
+            }
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+          })()
+          if (image.mode !== 'custom' || !bbox) {
+            const fitScale = bbox && state.sourceImage
+              ? imageScaleForMode('fit', bbox, state.sourceImage, 1) : 1
+            const scale = fitScale * newZoom
+            const pan = bbox && state.sourceImage
+              ? defaultPan(bbox, scale, state.sourceImage) : { panX: 0, panY: 0 }
+            return { image: { mode: 'custom', zoom: newZoom, panX: pan.panX, panY: pan.panY } }
+          }
+          const cx = bbox.x + bbox.w / 2
+          const cy = bbox.y + bbox.h / 2
+          const ratio = newZoom / image.zoom
+          return {
+            image: {
+              mode: 'custom',
+              zoom: newZoom,
+              panX: cx - (cx - image.panX) * ratio,
+              panY: cy - (cy - image.panY) * ratio,
+            },
+          }
+        }),
       setImagePan: (panX, panY) => set({ image: { ...get().image, mode: 'custom', panX, panY } }),
       setImageTransform: (zoom, panX, panY) =>
         set({ image: { mode: 'custom', zoom: Math.max(1, Math.min(3, zoom)), panX, panY } }),
