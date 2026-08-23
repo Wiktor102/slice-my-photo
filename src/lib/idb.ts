@@ -14,16 +14,23 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
-export async function idbSetImage(value: unknown): Promise<void> {
+export async function idbSetImageStrict(value: unknown): Promise<void> {
+  const db = await openDb()
   try {
-    const db = await openDb()
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite')
       tx.objectStore(STORE).put(value, KEY)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
+  } finally {
     db.close()
+  }
+}
+
+export async function idbSetImage(value: unknown): Promise<void> {
+  try {
+    await idbSetImageStrict(value)
   } catch {
     /* ignore persistence errors */
   }
