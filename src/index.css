@@ -486,6 +486,39 @@ button.big { padding: 10px 16px; font-size: 15px; }
 }
 .panel-row .del:hover { color: var(--danger); }
 
+.layout-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.layout-selection-hint,
+.layout-key-hint {
+  line-height: 1.35;
+}
+.layout-tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.layout-tool-row button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+.layout-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 2px;
+}
+.layout-tool-group > span {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .empty-hint {
   color: var(--text-dim);
   font-size: 12px;

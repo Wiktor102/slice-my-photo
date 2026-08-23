@@ -18,6 +18,7 @@ import { clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolve
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
+import { alignRects, centerRectsOnWall, clampOuterPosition, distributeRects, translateRects, type Alignment, type LayoutPosition } from '../lib/layoutTools'
 
 export type Screen = 'upload' | 'editor'
 
@@ -31,6 +32,8 @@ interface State {
   wall: WallSetup
   panels: Panel[]
   selectedId: string | null
+  /** Selected panel ids; selectedId remains the primary/inspected panel for compatibility. */
+  selectedIds: string[]
   imageSelected: boolean
   perPanelFrame: Record<string, PerPanelFrame>
 
@@ -68,7 +71,13 @@ interface State {
   setCurrentSizeKey: (key: string) => void
   addPanel: () => void
   deletePanel: (id: string) => void
-  selectPanel: (id: string | null) => void
+  deleteSelectedPanels: () => void
+  selectPanel: (id: string | null, additive?: boolean) => void
+  duplicateSelectedPanels: () => void
+  alignSelectedPanels: (axis: 'horizontal' | 'vertical', alignment: Alignment) => void
+  distributeSelectedPanels: (axis: 'horizontal' | 'vertical') => void
+  centerSelectedPanels: () => void
+  nudgeSelectedPanels: (dx: number, dy: number, large?: boolean) => void
   selectImage: (b: boolean) => void
   updatePanel: (id: string, partial: Partial<Panel>) => void
   setPanelSize: (id: string, w: number, h: number, presetKey: string) => void
@@ -132,14 +141,38 @@ function initialPassepartout(panel: Pick<Panel, 'width' | 'height' | 'sizePreset
   return frame.matEnabled ? legacyPassepartout(panel, frame) : defaultPassepartout(panel)
 }
 
+function applyOuterPositions(
+  panels: Panel[],
+  positions: LayoutPosition[],
+  frame: FrameStyle,
+  perPanelFrame: Record<string, PerPanelFrame>,
+): Panel[] {
+  const byId = new Map(positions.map((position) => [position.id, position]))
+  return panels.map((panel) => {
+    const position = byId.get(panel.id)
+    if (!position) return panel
+    const resolved = resolveFrame(panel, frame, perPanelFrame)
+    return { ...panel, x: position.x + resolved.edgeWidth, y: position.y + resolved.edgeWidth }
+  })
+}
+
 function normalizePersistedState(value: unknown): unknown {
   const state = value as Partial<State> | undefined
   if (!state || !Array.isArray(state.panels)) return value
 
   const frame = state.frame ?? DEFAULT_FRAME
   const shouldLiftLegacyMat = Boolean(frame.matEnabled)
+  const panelIds = new Set(state.panels.map((panel) => panel.id))
+  const selectedIds = Array.isArray(state.selectedIds)
+    ? state.selectedIds.filter((id): id is string => typeof id === 'string' && panelIds.has(id))
+    : state.selectedId && panelIds.has(state.selectedId) ? [state.selectedId] : []
+  const selectedId = state.selectedId && selectedIds.includes(state.selectedId)
+    ? state.selectedId
+    : (selectedIds.at(-1) ?? null)
   return {
     ...state,
+    selectedId,
+    selectedIds,
     panels: state.panels.map((panel) => {
       const passepartout = shouldLiftLegacyMat
         ? legacyPassepartout(panel, frame)
@@ -161,6 +194,7 @@ export const useStore = create<State>()(
       wall: { ...DEFAULT_WALL },
       panels: [],
       selectedId: null,
+      selectedIds: [],
       imageSelected: false,
       perPanelFrame: {},
 
@@ -220,6 +254,7 @@ export const useStore = create<State>()(
           screen: 'upload',
           panels: [],
           selectedId: null,
+          selectedIds: [],
           imageSelected: false,
           perPanelFrame: {},
           frame: { ...get().frame, perPanel: false },
@@ -250,6 +285,7 @@ export const useStore = create<State>()(
           panels,
           presetActive: key,
           selectedId: null,
+          selectedIds: [],
           perPanelFrame: {},
           frame: { ...frame, perPanel: false },
           image: { ...DEFAULT_IMAGE },
@@ -293,18 +329,20 @@ export const useStore = create<State>()(
         const innerY = (wall.height - h) / 2
         const sizePreset = findPreset(unit, w, h)
         const panel: Panel = { id: makePanelId(), width: w, height: h, x: innerX, y: innerY, sizePreset, passepartout: initialPassepartout({ width: w, height: h, sizePreset }, frame) }
-        set({ panels: [...panels, panel], selectedId: panel.id, presetActive: null })
+        set({ panels: [...panels, panel], selectedId: panel.id, selectedIds: [panel.id], presetActive: null })
       },
 
       deletePanel: (id) => {
-        const { panels, selectedId, perPanelFrame, frame } = get()
+        const { panels, selectedId, selectedIds, perPanelFrame, frame } = get()
         const next = panels.filter((p) => p.id !== id)
+        const nextSelectedIds = selectedIds.filter((selected) => selected !== id)
         const nextPer = { ...perPanelFrame }
         delete nextPer[id]
         const wasSelected = selectedId === id
         const updates: Partial<State> = {
           panels: next,
-          selectedId: wasSelected ? null : selectedId,
+          selectedId: wasSelected ? (nextSelectedIds.at(-1) ?? null) : selectedId,
+          selectedIds: nextSelectedIds,
           perPanelFrame: nextPer,
           presetActive: null,
         }
@@ -312,14 +350,119 @@ export const useStore = create<State>()(
         set(updates)
       },
 
-      selectPanel: (id) => {
-        const updates: Partial<State> = { selectedId: id, imageSelected: false }
-        if (!id) updates.frame = { ...get().frame, perPanel: false }
+      deleteSelectedPanels: () => {
+        const { selectedIds } = get()
+        if (selectedIds.length === 0) return
+        const ids = new Set(selectedIds)
+        const { perPanelFrame, frame } = get()
+        const nextPer = { ...perPanelFrame }
+        for (const id of ids) delete nextPer[id]
+        set({
+          panels: get().panels.filter((panel) => !ids.has(panel.id)),
+          selectedId: null,
+          selectedIds: [],
+          perPanelFrame: nextPer,
+          frame: { ...frame, perPanel: false },
+          presetActive: null,
+        })
+      },
+
+      selectPanel: (id, additive = false) => {
+        const current = get().selectedIds
+        let selectedIds: string[]
+        if (!id) selectedIds = []
+        else if (!additive) selectedIds = [id]
+        else if (current.includes(id)) selectedIds = current.filter((selected) => selected !== id)
+        else selectedIds = [...current, id]
+        const selectedId = id && selectedIds.includes(id)
+          ? id
+          : (selectedIds.at(-1) ?? null)
+        const updates: Partial<State> = { selectedId, selectedIds, imageSelected: false }
+        if (!selectedId) updates.frame = { ...get().frame, perPanel: false }
         set(updates)
       },
 
+      duplicateSelectedPanels: () => {
+        const { panels, selectedIds, frame, wall, perPanelFrame } = get()
+        if (selectedIds.length === 0 || panels.length >= 8) return
+        const sourceIds = new Set(selectedIds)
+        const selected = panels.filter((panel) => sourceIds.has(panel.id))
+        const count = Math.min(selected.length, 8 - panels.length)
+        const offset = Math.max(2, get().gap)
+        const duplicates: Panel[] = []
+        const duplicateFrame: Record<string, PerPanelFrame> = {}
+        for (const source of selected.slice(0, count)) {
+          const id = makePanelId()
+          const sourceFrame = resolveFrame(source, frame, perPanelFrame)
+          const outer = panelGeometry(source, sourceFrame).outer
+          const nextOuter = clampOuterPosition(outer.x + offset, outer.y + offset, outer.w, outer.h, wall.width, wall.height)
+          const duplicate: Panel = {
+            ...source,
+            id,
+            x: nextOuter.x + sourceFrame.edgeWidth,
+            y: nextOuter.y + sourceFrame.edgeWidth,
+          }
+          duplicates.push(duplicate)
+          const override = perPanelFrame[source.id]
+          if (override) duplicateFrame[id] = { ...override, passepartout: { ...override.passepartout } }
+        }
+        const nextIds = duplicates.map((panel) => panel.id)
+        set({
+          panels: [...panels, ...duplicates],
+          selectedId: nextIds.at(-1) ?? null,
+          selectedIds: nextIds,
+          perPanelFrame: { ...perPanelFrame, ...duplicateFrame },
+          presetActive: null,
+        })
+      },
+
+      alignSelectedPanels: (axis, alignment) => {
+        const { panels, selectedIds, frame, perPanelFrame, wall } = get()
+        const ids = new Set(selectedIds)
+        if (ids.size === 0) return
+        const selected = panels.filter((panel) => ids.has(panel.id))
+        const rects = selected.map((panel) => ({ id: panel.id, ...panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)).outer }))
+        const positions = alignRects(rects, axis, alignment, wall.width, wall.height)
+        set({ panels: applyOuterPositions(panels, positions, frame, perPanelFrame) })
+      },
+
+      distributeSelectedPanels: (axis) => {
+        const { panels, selectedIds, frame, perPanelFrame, wall } = get()
+        if (selectedIds.length < 3) return
+        const ids = new Set(selectedIds)
+        const selected = panels.filter((panel) => ids.has(panel.id))
+        const rects = selected.map((panel) => ({ id: panel.id, ...panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)).outer }))
+        const positions = distributeRects(rects, axis, wall.width, wall.height)
+        set({ panels: applyOuterPositions(panels, positions, frame, perPanelFrame) })
+      },
+
+      centerSelectedPanels: () => {
+        const { panels, selectedIds, frame, perPanelFrame, wall } = get()
+        if (selectedIds.length === 0) return
+        const ids = new Set(selectedIds)
+        const selected = panels.filter((panel) => ids.has(panel.id))
+        const rects = selected.map((panel) => ({ id: panel.id, ...panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)).outer }))
+        const positions = centerRectsOnWall(rects, wall.width, wall.height)
+        set({ panels: applyOuterPositions(panels, positions, frame, perPanelFrame) })
+      },
+
+      nudgeSelectedPanels: (dx, dy, large = false) => {
+        const { panels, selectedIds, frame, perPanelFrame, wall, unit } = get()
+        if (selectedIds.length === 0) return
+        const step = (unit === 'cm' ? 1 : 0.25) * (large ? 10 : 1)
+        const ids = new Set(selectedIds)
+        const selected = panels.filter((panel) => ids.has(panel.id))
+        const rects = selected.map((panel) => ({ id: panel.id, ...panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)).outer }))
+        const positions = translateRects(rects, dx * step, dy * step, wall.width, wall.height)
+        set({ panels: applyOuterPositions(panels, positions, frame, perPanelFrame) })
+      },
+
       selectImage: (b) => {
-        const updates: Partial<State> = { imageSelected: b, selectedId: b ? null : get().selectedId }
+        const updates: Partial<State> = {
+          imageSelected: b,
+          selectedId: b ? null : get().selectedId,
+          selectedIds: b ? [] : get().selectedIds,
+        }
         if (b) updates.frame = { ...get().frame, perPanel: false }
         set(updates)
       },
@@ -374,16 +517,10 @@ export const useStore = create<State>()(
         const panel = get().panels.find((p) => p.id === id)
         if (!panel) return
         const f = resolveFrame(panel, frame, perPanelFrame)
-        const e = f.edgeWidth
         const g = panelGeometry(panel, f)
-        let ox = outerX
-        let oy = outerY
-        if (ox < 0) ox = 0
-        if (oy < 0) oy = 0
-        if (ox + g.outer.w > wall.width) ox = wall.width - g.outer.w
-        if (oy + g.outer.h > wall.height) oy = wall.height - g.outer.h
+        const { x: ox, y: oy } = clampOuterPosition(outerX, outerY, g.outer.w, g.outer.h, wall.width, wall.height)
         set({
-          panels: get().panels.map((p) => (p.id === id ? { ...p, x: ox + e, y: oy + e } : p)),
+          panels: get().panels.map((p) => (p.id === id ? { ...p, x: ox + f.edgeWidth, y: oy + f.edgeWidth } : p)),
         })
       },
 
@@ -519,6 +656,7 @@ export const useStore = create<State>()(
           currentSizeKey: layout.currentSizeKey,
           presetActive: layout.presetActive,
           selectedId: null,
+          selectedIds: [],
           imageSelected: false,
           image: { ...DEFAULT_IMAGE },
           loadLayoutOpen: false,
@@ -533,6 +671,7 @@ export const useStore = create<State>()(
         set({
           panels: [],
           selectedId: null,
+          selectedIds: [],
           imageSelected: false,
           perPanelFrame: {},
           wall: { ...DEFAULT_WALL },
@@ -548,13 +687,14 @@ export const useStore = create<State>()(
     }),
     {
       name: 'slice-my-photo-state',
-      version: 2,
+      version: 3,
       migrate: normalizePersistedState,
       partialize: (s) => ({
         unit: s.unit,
         wall: s.wall,
         panels: s.panels,
         selectedId: s.selectedId,
+        selectedIds: s.selectedIds,
         perPanelFrame: s.perPanelFrame,
         frame: s.frame,
         image: s.image,
