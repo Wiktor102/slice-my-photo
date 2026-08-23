@@ -142,10 +142,10 @@ export function clampPanelToWall(panel: Panel, frame: PerPanelFrame, wallW: numb
   const e = frame.edgeWidth
   let outerX = g.outer.x
   let outerY = g.outer.y
-  if (outerX < 0) outerX = 0
-  if (outerY < 0) outerY = 0
-  if (outerX + g.outer.w > wallW) outerX = wallW - g.outer.w
-  if (outerY + g.outer.h > wallH) outerY = wallH - g.outer.h
+  const maxX = Math.max(0, wallW - g.outer.w)
+  const maxY = Math.max(0, wallH - g.outer.h)
+  outerX = Math.max(0, Math.min(outerX, maxX))
+  outerY = Math.max(0, Math.min(outerY, maxY))
   return { ...panel, x: outerX + e, y: outerY + e }
 }
 

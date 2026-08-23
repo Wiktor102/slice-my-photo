@@ -11,6 +11,7 @@ interface Props {
   panel: Panel
   frame: PerPanelFrame
   selected: boolean
+  transformable: boolean
   image: HTMLImageElement | undefined
   sourceImage: SourceImage | null
   scale: number
@@ -26,7 +27,7 @@ interface Props {
 }
 
 export function PanelNode({
-  panel, frame, selected, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, panelNumber, interactive, setSnapLines, setTip,
+  panel, frame, selected, transformable, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, panelNumber, interactive, setSnapLines, setTip,
 }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -45,8 +46,10 @@ export function PanelNode({
   const frameColor = frameHex(frame.colorKey, frame.customColor)
   const matColor = matHex(mat.colorKey, mat.customColor)
 
-  const handleSelect = () => {
-    if (interactive) selectPanel(panel.id)
+  const handleSelect = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (!interactive) return
+    const additive = event.evt.shiftKey || event.evt.ctrlKey || event.evt.metaKey
+    selectPanel(panel.id, additive)
   }
 
   useEffect(() => {
@@ -220,6 +223,18 @@ export function PanelNode({
         )}
       </Group>
       {selected && (
+        <Rect
+          x={outer.x}
+          y={outer.y}
+          width={outer.w}
+          height={outer.h}
+          stroke="#4a7dff"
+          strokeWidth={1.5 / viewportScale}
+          dash={[6 / viewportScale, 4 / viewportScale]}
+          listening={false}
+        />
+      )}
+      {transformable && (
         <Transformer
           ref={trRef}
           rotateEnabled={false}
