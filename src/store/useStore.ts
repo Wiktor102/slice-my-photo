@@ -18,6 +18,7 @@ import { clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolve
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
+import type { PortableProject } from '../lib/portableProject'
 
 export type Screen = 'upload' | 'editor'
 
@@ -99,6 +100,7 @@ interface State {
   setLoadLayoutOpen: (o: boolean) => void
   showToast: (msg: string) => void
   loadLayout: (layout: SavedLayout) => void
+  restorePortableProject: (project: PortableProject) => void
 
   resetProject: () => void
 }
@@ -527,6 +529,49 @@ export const useStore = create<State>()(
           const label = layout.unit === 'cm' ? 'cm' : 'inches'
           setTimeout(() => get().showToast(`Units switched to ${label} to match the loaded layout.`), 100)
         }
+      },
+
+      restorePortableProject: (project) => {
+        const panels = project.state.panels.map((panel) => ({
+          ...panel,
+          passepartout: normalizePassepartout(panel, project.state.frame),
+        }))
+        const perPanelFrame = Object.fromEntries(
+          Object.entries(project.state.perPanelFrame).map(([id, perPanel]) => {
+            const panel = panels.find((candidate) => candidate.id === id)
+            return [id, panel ? { ...perPanel, passepartout: normalizePassepartout(panel, perPanel) } : { ...perPanel }]
+          }),
+        )
+        const previous = get()
+        set({
+          screen: 'editor',
+          sourceImage: { ...project.sourceImage },
+          imageLoading: false,
+          imageWarning: null,
+          unit: project.state.unit,
+          wall: { ...project.state.wall },
+          panels,
+          selectedId: null,
+          imageSelected: false,
+          perPanelFrame,
+          frame: { ...project.state.frame },
+          image: { ...project.state.image },
+          presetActive: project.state.presetActive,
+          gap: project.state.gap,
+          currentSizeKey: project.state.currentSizeKey,
+          viewport: { x: 0, y: 0, scale: 3 },
+          showGrid: previous.showGrid,
+          gapSnapEnabled: previous.gapSnapEnabled,
+          preview: false,
+          exportOpen: false,
+          confirmReset: false,
+          homeOpen: false,
+          saveLayoutOpen: false,
+          loadLayoutOpen: false,
+          toast: null,
+          zoomToFitToken: previous.zoomToFitToken + 1,
+          zoomToImageToken: previous.zoomToImageToken,
+        })
       },
 
       resetProject: () =>
