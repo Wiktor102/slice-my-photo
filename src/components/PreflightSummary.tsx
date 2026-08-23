@@ -1,0 +1,128 @@
+import { useMemo } from 'react'
+import { computePreflight } from '../lib/preflight'
+import { useImagePlacement, useStore } from '../store/useStore'
+import type { PreflightStatus } from '../lib/preflight'
+
+const STATUS_LABEL: Record<PreflightStatus, string> = {
+  good: 'Ready',
+  warning: 'Review',
+  error: 'Fix needed',
+}
+
+function statusIcon(status: PreflightStatus): string {
+  if (status === 'good') return '✓'
+  if (status === 'warning') return '!'
+  return '×'
+}
+
+function formatDpi(dpi: number): string {
+  return dpi > 0 ? `${Math.round(dpi)} DPI` : 'No image coverage'
+}
+
+function formatEdges(edges: string[]): string {
+  return edges.join(', ')
+}
+
+export function PreflightSummary() {
+  const sourceImage = useStore((s) => s.sourceImage)
+  const panels = useStore((s) => s.panels)
+  const frame = useStore((s) => s.frame)
+  const perPanelFrame = useStore((s) => s.perPanelFrame)
+  const wall = useStore((s) => s.wall)
+  const unit = useStore((s) => s.unit)
+  const { scale, panX, panY } = useImagePlacement()
+
+  const report = useMemo(() => {
+    if (!sourceImage || panels.length === 0) return null
+    return computePreflight({
+      panels,
+      frame,
+      perPanelFrame,
+      wall,
+      unit,
+      sourceImage,
+      placement: { scale, panX, panY },
+    })
+  }, [sourceImage, panels, frame, perPanelFrame, wall, unit, scale, panX, panY])
+
+  if (!sourceImage) {
+    return (
+      <section className="card preflight-card" aria-labelledby="preflight-title">
+        <div className="section-title" id="preflight-title">Print preflight</div>
+        <div className="hint">Upload an image to check print quality.</div>
+      </section>
+    )
+  }
+
+  if (!report || report.panels.length === 0) {
+    return (
+      <section className="card preflight-card" aria-labelledby="preflight-title">
+        <div className="section-title" id="preflight-title">Print preflight</div>
+        <div className="hint">Add a panel to check print quality.</div>
+      </section>
+    )
+  }
+
+  const overallStatus: PreflightStatus = report.errorCount > 0
+    ? 'error'
+    : report.warningCount > 0
+      ? 'warning'
+      : 'good'
+  const overallLabel = overallStatus === 'good'
+    ? 'Ready to print'
+    : overallStatus === 'warning'
+      ? 'Review before export'
+      : 'Fix issues before export'
+
+  return (
+    <section className={`card preflight-card preflight-${overallStatus}`} aria-labelledby="preflight-title">
+      <div className="preflight-heading" role="status" aria-live="polite">
+        <span className={`preflight-badge preflight-badge-${overallStatus}`} aria-hidden="true">{statusIcon(overallStatus)}</span>
+        <div className="preflight-heading-copy">
+          <div className="section-title" id="preflight-title">Print preflight</div>
+          <strong>{overallLabel}</strong>
+        </div>
+        <span className="preflight-counts">
+          <span className="preflight-count-good">{report.panels.filter((panel) => panel.status === 'good').length} OK</span>
+          {report.warningCount > 0 && <span className="preflight-count-warning">{report.warningCount} review</span>}
+          {report.errorCount > 0 && <span className="preflight-count-error">{report.errorCount} issue{report.errorCount === 1 ? '' : 's'}</span>}
+        </span>
+      </div>
+
+      <div className="preflight-legend">300+ DPI good · 150–299 review · under 150 low</div>
+
+      <div className="preflight-panels">
+        {report.panels.map((panel) => {
+          const issueLines: string[] = []
+          if (panel.coverage.coverageRatio < 1) {
+            issueLines.push(panel.coverage.coveredRect
+              ? `Image gap: ${formatEdges(panel.coverage.missingEdges)}`
+              : 'Image does not cover this crop')
+          }
+          if (panel.overlaps.length > 0) {
+            issueLines.push(`Overlaps panel${panel.overlaps.length === 1 ? '' : 's'} ${panel.overlaps.map((index) => index + 1).join(', ')}`)
+          }
+          if (panel.outsideWall.length > 0) issueLines.push(`Outside wall: ${formatEdges(panel.outsideWall)}`)
+
+          return (
+            <div className={`preflight-panel preflight-panel-${panel.status}`} key={panel.panelId}>
+              <div className="preflight-panel-row">
+                <span className={`preflight-dot preflight-dot-${panel.status}`} aria-label={STATUS_LABEL[panel.status]}>{statusIcon(panel.status)}</span>
+                <span className="preflight-panel-name">Panel {panel.index + 1}</span>
+                <span className="preflight-panel-dpi">{formatDpi(panel.dpi)}</span>
+                <span className="preflight-panel-coverage">{Math.round(panel.coverage.coverageRatio * 100)}%</span>
+              </div>
+              {issueLines.length > 0 ? (
+                <div className="preflight-issues">
+                  {issueLines.map((line) => <div key={line}>{line}</div>)}
+                </div>
+              ) : (
+                <div className="preflight-ok-detail">Image fully covered · no layout conflicts</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
