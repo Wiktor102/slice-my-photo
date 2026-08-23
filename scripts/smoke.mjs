@@ -86,13 +86,30 @@ await step('apply Triptych preset', async () => {
   if (n < 3) throw new Error('expected >=3 panels, got ' + n)
   console.log('   panels:', n)
 })
+await step('save and compare variants', async () => {
+  await page.getByRole('button', { name: 'Compare', exact: true }).click()
+  await page.waitForSelector('.variant-modal')
+  const name = page.getByRole('textbox', { name: 'Variant name' })
+  for (const label of ['Gallery A', 'Gallery B', 'Gallery C']) {
+    await name.fill(label)
+    await page.getByRole('button', { name: 'Save variant', exact: true }).click()
+  }
+  const checks = page.locator('.variant-check input')
+  await checks.nth(0).check()
+  await checks.nth(1).check()
+  await page.getByRole('button', { name: 'Compare selected', exact: true }).click()
+  await page.waitForSelector('.compare-overlay')
+  if (await page.locator('.compare-cell').count() !== 2) throw new Error('expected two comparison cells')
+  await page.getByRole('button', { name: 'Back to variants', exact: true }).click()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+})
 await step('click canvas to select', async () => {
-  await page.locator('canvas').first().click({ position: { x: 250, y: 200 } })
+  await page.locator('.panel-row').first().click()
   await page.waitForTimeout(200)
 })
-await step('change wall color', async () => { await page.locator('input[type=color]').first().fill('#aabbcc') })
+await step('change wall color', async () => { await page.locator('.sidebar.right .swatch[title="Soft Gray"]').click() })
 await step('enable mat', async () => {
-  await page.locator('.toggle', { hasText: 'Mat' }).click({ timeout: 3000 })
+  await page.locator('.toggle', { hasText: 'Use passepartout' }).click({ timeout: 3000 })
   await page.waitForTimeout(200)
 })
 await step('open export modal', async () => {
