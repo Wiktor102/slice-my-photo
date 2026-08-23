@@ -9,6 +9,7 @@ import type {
   SavedLayout,
   SourceImage,
   Unit,
+  VariantSnapshot,
   Viewport,
   WallSetup,
 } from '../types'
@@ -99,6 +100,7 @@ interface State {
   setLoadLayoutOpen: (o: boolean) => void
   showToast: (msg: string) => void
   loadLayout: (layout: SavedLayout) => void
+  loadVariant: (variant: VariantSnapshot) => void
 
   resetProject: () => void
 }
@@ -527,6 +529,27 @@ export const useStore = create<State>()(
           const label = layout.unit === 'cm' ? 'cm' : 'inches'
           setTimeout(() => get().showToast(`Units switched to ${label} to match the loaded layout.`), 100)
         }
+      },
+
+      loadVariant: (variant) => {
+        set({
+          unit: variant.unit,
+          wall: { ...variant.wall },
+          panels: variant.panels.map((p) => ({ ...p, passepartout: normalizePassepartout(p, variant.frame) })),
+          frame: { ...variant.frame },
+          perPanelFrame: Object.fromEntries(
+            Object.entries(variant.perPanelFrame).map(([id, panelFrame]) => [id, {
+              ...panelFrame,
+              passepartout: { ...panelFrame.passepartout },
+            }]),
+          ),
+          image: { ...variant.image },
+          gap: variant.gap,
+          currentSizeKey: variant.currentSizeKey,
+          presetActive: variant.presetActive,
+          selectedId: null,
+          imageSelected: false,
+        })
       },
 
       resetProject: () =>
