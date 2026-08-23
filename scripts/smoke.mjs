@@ -117,6 +117,23 @@ try {
     if (n < 3) throw new Error('expected >=3 panels, got ' + n)
     console.log('   panels:', n)
   })
+  await step('save and compare variants', async () => {
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    await page.waitForSelector('.variant-modal')
+    const name = page.getByRole('textbox', { name: 'Variant name' })
+    for (const label of ['Gallery A', 'Gallery B', 'Gallery C']) {
+      await name.fill(label)
+      await page.getByRole('button', { name: 'Save variant', exact: true }).click()
+    }
+    const checks = page.locator('.variant-check input')
+    await checks.nth(0).check()
+    await checks.nth(1).check()
+    await page.getByRole('button', { name: 'Compare selected', exact: true }).click()
+    await page.waitForSelector('.compare-overlay')
+    if (await page.locator('.compare-cell').count() !== 2) throw new Error('expected two comparison cells')
+    await page.getByRole('button', { name: 'Back to variants', exact: true }).click()
+    await page.getByRole('button', { name: 'Close variants', exact: true }).click()
+  })
   await step('undo and redo layout change', async () => {
     const undo = page.getByRole('button', { name: /^Undo/ })
     const redo = page.getByRole('button', { name: /^Redo/ })

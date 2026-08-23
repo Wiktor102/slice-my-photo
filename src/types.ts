@@ -140,3 +140,24 @@ export interface SavedLayout {
   currentSizeKey: string
   presetActive: string | null
 }
+
+/** Durable visual/layout state used by Compare mode without embedding image data. */
+export interface VariantSnapshot {
+  unit: Unit
+  wall: WallSetup
+  panels: Panel[]
+  frame: FrameStyle
+  perPanelFrame: Record<string, PerPanelFrame>
+  image: ImageTransform
+  gap: number
+  currentSizeKey: string
+  presetActive: string | null
+}
+
+export interface DesignVariant extends VariantSnapshot {
+  id: string
+  name: string
+  savedAt: number
+  /** Stable identity for the source image; the image bytes are never stored here. */
+  sourceSignature: string
+}

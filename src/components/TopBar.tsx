@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ImageIcon, SaveIcon, FolderOpenIcon, RotateCcwIcon, EyeIcon, EyeOffIcon, DownloadIcon, HomeIcon, Undo2Icon, Redo2Icon } from 'lucide-react'
+import { Columns2Icon, ImageIcon, SaveIcon, FolderOpenIcon, RotateCcwIcon, EyeIcon, EyeOffIcon, DownloadIcon, HomeIcon, Undo2Icon, Redo2Icon } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp'
@@ -9,7 +9,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
-export function TopBar() {
+export function TopBar({ onOpenVariants }: { onOpenVariants: () => void }) {
   const setConfirmReset = useStore((s) => s.setConfirmReset)
   const setPreview = useStore((s) => s.setPreview)
   const setExportOpen = useStore((s) => s.setExportOpen)
@@ -89,6 +89,7 @@ export function TopBar() {
       >
         <Redo2Icon size={14} />Redo
       </button>
+      <button className="ghost" onClick={onOpenVariants}><Columns2Icon size={14} />Compare</button>
       <div className="spacer" />
       <button onClick={() => setConfirmReset(true)}><RotateCcwIcon size={14} />Reset</button>
       <button className={preview ? 'primary' : ''} onClick={() => setPreview(!preview)}>
