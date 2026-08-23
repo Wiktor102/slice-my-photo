@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { HexColorPicker } from 'react-colorful'
 import { PipetteIcon } from 'lucide-react'
 import { WALL_COLORS } from '../lib/frameColors'
+import { useStore } from '../store/useStore'
 
 interface NumberFieldProps {
   label: string
@@ -49,6 +50,8 @@ export function Swatches({
 }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
+  const endHistoryGroup = useStore((s) => s.endHistoryGroup)
   const presets = options.filter((o) => o.key !== 'custom')
 
   // Click-outside: just close the picker. The colour is already committed
@@ -102,7 +105,12 @@ export function Swatches({
         </button>
       </div>
       {value === 'custom' && open && (
-        <div style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>
+        <div
+          style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}
+          onPointerDown={beginHistoryGroup}
+          onPointerUp={endHistoryGroup}
+          onPointerCancel={endHistoryGroup}
+        >
           <HexColorPicker color={customColor} onChange={onCustomColor} />
         </div>
       )}
@@ -119,6 +127,8 @@ export function WallColorPicker({
 }) {
   const [customOpen, setCustomOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
+  const endHistoryGroup = useStore((s) => s.endHistoryGroup)
   const presets = WALL_COLORS
 
   useEffect(() => {
@@ -162,7 +172,12 @@ export function WallColorPicker({
         </button>
       </div>
       {customOpen && (
-        <div style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>
+        <div
+          style={{ background: '#1d1d23', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}
+          onPointerDown={beginHistoryGroup}
+          onPointerUp={endHistoryGroup}
+          onPointerCancel={endHistoryGroup}
+        >
           <HexColorPicker color={color} onChange={onChange} />
         </div>
       )}

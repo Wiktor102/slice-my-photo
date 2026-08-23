@@ -26,6 +26,8 @@ export function RightSidebar() {
   const updatePassepartout = useStore((s) => s.updatePassepartout)
   const setImageMode = useStore((s) => s.setImageMode)
   const setImageZoom = useStore((s) => s.setImageZoom)
+  const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
+  const endHistoryGroup = useStore((s) => s.endHistoryGroup)
 
   const selected = panels.find((p) => p.id === selectedId) ?? null
   const selFrame = selected ? resolveFrame(selected, frame, perPanelFrame) : null
@@ -268,6 +270,9 @@ export function RightSidebar() {
               step={0.01}
               value={image.zoom}
               onChange={(e) => setImageZoom(Number(e.target.value))}
+              onPointerDown={beginHistoryGroup}
+              onPointerUp={endHistoryGroup}
+              onPointerCancel={endHistoryGroup}
             />
           </label>
         )}
