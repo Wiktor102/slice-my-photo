@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDownIcon } from 'lucide-react'
 import { computePreflight } from '../lib/preflight'
 import { useImagePlacement, useStore } from '../store/useStore'
 import { useDebouncedValue } from '../lib/useDebouncedValue'
@@ -55,6 +56,18 @@ export function PreflightSummary() {
     return computePreflight({ ...settled, sourceImage: settled.sourceImage })
   }, [settled])
 
+  // Collapsed by default to keep the sidebar calm; expands itself the first
+  // time errors appear so "fix before export" is never missed. After that the
+  // user stays in control until the errors clear and reappear.
+  const [open, setOpen] = useState(false)
+  const hadErrors = useRef(false)
+  useEffect(() => {
+    if (!report) return
+    const hasErrors = report.errorCount > 0
+    if (hasErrors && !hadErrors.current) setOpen(true)
+    hadErrors.current = hasErrors
+  }, [report])
+
   if (!sourceImage) {
     return (
       <section className="card preflight-card" aria-labelledby="preflight-title">
@@ -89,7 +102,13 @@ export function PreflightSummary() {
       className={`card preflight-card preflight-${overallStatus}${settling ? ' preflight-settling' : ''}`}
       aria-labelledby="preflight-title"
     >
-      <div className="preflight-heading" role="status" aria-live="polite">
+      <button
+        type="button"
+        className="preflight-heading"
+        aria-expanded={open}
+        aria-controls="preflight-body"
+        onClick={() => setOpen((o) => !o)}
+      >
         <span className={`preflight-badge preflight-badge-${overallStatus}`} aria-hidden="true">{statusIcon(overallStatus)}</span>
         <div className="preflight-heading-copy">
           <div className="section-title" id="preflight-title">Print preflight</div>
@@ -104,42 +123,47 @@ export function PreflightSummary() {
                 {report.errorCount > 0 && <span className="preflight-count-error">{report.errorCount} issue{report.errorCount === 1 ? '' : 's'}</span>}
               </>}
         </span>
-      </div>
+        <ChevronDownIcon size={14} className="preflight-chevron" aria-hidden="true" />
+      </button>
 
-      <div className="preflight-legend">300+ DPI good · 150–299 review · under 150 low</div>
+      {open && (
+        <div id="preflight-body" className="preflight-body">
+          <div className="preflight-legend">300+ DPI good · 150–299 review · under 150 low</div>
 
-      <div className="preflight-panels">
-        {report.panels.map((panel) => {
-          const issueLines: string[] = []
-          if (panel.coverage.coverageRatio < 1) {
-            issueLines.push(panel.coverage.coveredRect
-              ? `Image gap: ${formatEdges(panel.coverage.missingEdges)}`
-              : 'Image does not cover this crop')
-          }
-          if (panel.overlaps.length > 0) {
-            issueLines.push(`Overlaps panel${panel.overlaps.length === 1 ? '' : 's'} ${panel.overlaps.map((index) => index + 1).join(', ')}`)
-          }
-          if (panel.outsideWall.length > 0) issueLines.push(`Outside wall: ${formatEdges(panel.outsideWall)}`)
+          <div className="preflight-panels">
+            {report.panels.map((panel) => {
+              const issueLines: string[] = []
+              if (panel.coverage.coverageRatio < 1) {
+                issueLines.push(panel.coverage.coveredRect
+                  ? `Image gap: ${formatEdges(panel.coverage.missingEdges)}`
+                  : 'Image does not cover this crop')
+              }
+              if (panel.overlaps.length > 0) {
+                issueLines.push(`Overlaps panel${panel.overlaps.length === 1 ? '' : 's'} ${panel.overlaps.map((index) => index + 1).join(', ')}`)
+              }
+              if (panel.outsideWall.length > 0) issueLines.push(`Outside wall: ${formatEdges(panel.outsideWall)}`)
 
-          return (
-            <div className={`preflight-panel preflight-panel-${panel.status}`} key={panel.panelId}>
-              <div className="preflight-panel-row">
-                <span className={`preflight-dot preflight-dot-${panel.status}`} aria-label={STATUS_LABEL[panel.status]}>{statusIcon(panel.status)}</span>
-                <span className="preflight-panel-name">Panel {panel.index + 1}</span>
-                <span className="preflight-panel-dpi">{formatDpi(panel.dpi)}</span>
-                <span className="preflight-panel-coverage">{Math.round(panel.coverage.coverageRatio * 100)}%</span>
-              </div>
-              {issueLines.length > 0 ? (
-                <div className="preflight-issues">
-                  {issueLines.map((line) => <div key={line}>{line}</div>)}
+              return (
+                <div className={`preflight-panel preflight-panel-${panel.status}`} key={panel.panelId}>
+                  <div className="preflight-panel-row">
+                    <span className={`preflight-dot preflight-dot-${panel.status}`} aria-label={STATUS_LABEL[panel.status]}>{statusIcon(panel.status)}</span>
+                    <span className="preflight-panel-name">Panel {panel.index + 1}</span>
+                    <span className="preflight-panel-dpi">{formatDpi(panel.dpi)}</span>
+                    <span className="preflight-panel-coverage">{Math.round(panel.coverage.coverageRatio * 100)}%</span>
+                  </div>
+                  {issueLines.length > 0 ? (
+                    <div className="preflight-issues">
+                      {issueLines.map((line) => <div key={line}>{line}</div>)}
+                    </div>
+                  ) : (
+                    <div className="preflight-ok-detail">Image fully covered · no layout conflicts</div>
+                  )}
                 </div>
-              ) : (
-                <div className="preflight-ok-detail">Image fully covered · no layout conflicts</div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </section>
   )
 }
