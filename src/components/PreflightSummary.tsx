@@ -96,6 +96,20 @@ export function PreflightSummary() {
     : overallStatus === 'warning'
       ? 'Review before export'
       : 'Fix issues before export'
+  // Lead with what needs attention; only celebrate when everything passes.
+  const goodCount = report.panels.length - report.warningCount - report.errorCount
+  const counts = settling
+    ? <span className="preflight-count-pending">updating…</span>
+    : overallStatus === 'good'
+      ? <span className="preflight-count-good">All {goodCount} OK</span>
+      : <>
+          {report.errorCount > 0 && (
+            <span className="preflight-count-error">{report.errorCount} issue{report.errorCount === 1 ? '' : 's'}</span>
+          )}
+          {report.warningCount > 0 && (
+            <span className="preflight-count-warning">{report.warningCount} to review</span>
+          )}
+        </>
 
   return (
     <section
@@ -115,13 +129,7 @@ export function PreflightSummary() {
           <strong>{overallLabel}</strong>
         </div>
         <span className="preflight-counts">
-          {settling
-            ? <span className="preflight-count-pending">updating…</span>
-            : <>
-                <span className="preflight-count-good">{report.panels.filter((panel) => panel.status === 'good').length} OK</span>
-                {report.warningCount > 0 && <span className="preflight-count-warning">{report.warningCount} review</span>}
-                {report.errorCount > 0 && <span className="preflight-count-error">{report.errorCount} issue{report.errorCount === 1 ? '' : 's'}</span>}
-              </>}
+          {counts}
         </span>
         <ChevronDownIcon size={14} className="preflight-chevron" aria-hidden="true" />
       </button>
@@ -148,15 +156,13 @@ export function PreflightSummary() {
                   <div className="preflight-panel-row">
                     <span className={`preflight-dot preflight-dot-${panel.status}`} aria-label={STATUS_LABEL[panel.status]}>{statusIcon(panel.status)}</span>
                     <span className="preflight-panel-name">Panel {panel.index + 1}</span>
-                    <span className="preflight-panel-dpi">{formatDpi(panel.dpi)}</span>
+                    <span className={`preflight-panel-dpi preflight-dpi-${panel.dpiBand}`}>{formatDpi(panel.dpi)}</span>
                     <span className="preflight-panel-coverage">{Math.round(panel.coverage.coverageRatio * 100)}%</span>
                   </div>
-                  {issueLines.length > 0 ? (
+                  {issueLines.length > 0 && (
                     <div className="preflight-issues">
                       {issueLines.map((line) => <div key={line}>{line}</div>)}
                     </div>
-                  ) : (
-                    <div className="preflight-ok-detail">Image fully covered · no layout conflicts</div>
                   )}
                 </div>
               )
