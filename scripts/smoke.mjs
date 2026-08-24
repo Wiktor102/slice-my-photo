@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
 import { deflateSync } from 'node:zlib'
 import { chromium } from 'playwright'
 
@@ -38,117 +40,156 @@ function makePng(w, h, r, g, b) {
 const PNG = makePng(400, 600, 90, 140, 200)
 writeFileSync('./smoke-test.png', PNG)
 
-const server = spawn(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['dev'], { cwd: process.cwd(), stdio: 'pipe', shell: true })
-server.stdout.on('data', (d) => process.stdout.write('[vite] ' + d.toString()))
-server.stderr.on('data', (d) => process.stderr.write('[vite-err] ' + d.toString()))
-
-let url = ''
-await new Promise((resolve) => {
-  const to = setTimeout(() => { if (!url) { url = 'http://localhost:5173'; resolve() } }, 12000)
-  server.stdout.on('data', (d) => {
-    const m = d.toString().match(/http:\/\/localhost:(\d+)/)
-    if (m && !url) { url = 'http://localhost:' + m[1]; clearTimeout(to); resolve() }
-  })
-})
-console.log('using url:', url)
-
 const errors = []
-const browser = await chromium.launch()
-const page = await browser.newPage({ acceptDownloads: true })
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()) })
-page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
-await page.addInitScript(() => {
-  try {
-    if (!localStorage.getItem('__test_seeded')) {
-      localStorage.clear()
-      indexedDB.deleteDatabase('slice-my-photo')
-      localStorage.setItem('__test_seeded', '1')
-    }
-  } catch {}
-})
+let server = null
+let browser = null
+let exitCode = 1
 
-const step = async (name, fn) => { try { await fn(); console.log('OK:', name) } catch (e) { console.log('FAIL:', name, '-', e.message); errors.push(name + ': ' + e.message) } }
-
-await step('goto upload', async () => { await page.goto(url, { waitUntil: 'domcontentloaded' }); await page.waitForSelector('.upload-card', { timeout: 10000 }) })
-await step('upload image', async () => {
-  await page.setInputFiles('input[type=file]', { name: 'test.png', mimeType: 'image/png', buffer: PNG })
-  await page.waitForFunction(() => { const b = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Continue to Editor')); return !!b && !b.disabled }, { timeout: 12000 })
-})
-await step('continue to editor', async () => {
-  await page.click('button:has-text("Continue to Editor")')
-  await page.waitForSelector('.editor', { timeout: 8000 })
-})
-await step('apply Triptych preset', async () => {
-  await page.waitForSelector('.preset-btn')
-  await page.locator('.preset-btn', { hasText: 'Triptych' }).click()
-  await page.waitForTimeout(400)
-  const n = await page.locator('.panel-row').count()
-  if (n < 3) throw new Error('expected >=3 panels, got ' + n)
-  console.log('   panels:', n)
-})
-await step('undo and redo layout change', async () => {
-  const undo = page.getByRole('button', { name: /^Undo/ })
-  const redo = page.getByRole('button', { name: /^Redo/ })
-  if (await undo.isDisabled()) throw new Error('undo should be enabled after changing the layout')
-  await undo.click()
-  if (await page.locator('.panel-row').count() !== 0) throw new Error('undo did not remove the preset panels')
-  if (await redo.isDisabled()) throw new Error('redo should be enabled after undo')
-  await page.keyboard.press('Control+Shift+Z')
-  if (await page.locator('.panel-row').count() < 3) throw new Error('redo shortcut did not restore the preset')
-  await page.keyboard.press('Control+Z')
-  if (await page.locator('.panel-row').count() !== 0) throw new Error('undo shortcut did not remove the preset')
-  await redo.click()
-  if (await page.locator('.panel-row').count() < 3) throw new Error('redo button did not restore the preset')
-})
-await step('click canvas to select', async () => {
-  await page.locator('canvas').first().click({ position: { x: 250, y: 200 } })
-  await page.waitForTimeout(200)
-})
-await step('change wall color', async () => { await page.locator('input[type=color]').first().fill('#aabbcc') })
-await step('enable mat', async () => {
-  await page.locator('.toggle', { hasText: 'Mat' }).click({ timeout: 3000 })
-  await page.waitForTimeout(200)
-})
-await step('open export modal', async () => {
-  await page.click('button:has-text("Export")')
-  await page.waitForSelector('.modal', { timeout: 5000 })
-})
-await step('download zip', async () => {
-  await page.locator('.modal').textContent()
-  const dl = page.locator('button:has-text("Download ZIP")')
-  const [d] = await Promise.all([page.waitForEvent('download', { timeout: 25000 }), dl.click()])
-  const p = await d.path()
-  console.log('   saved:', p)
-  const fs = await import('node:fs/promises')
-  const buf = await fs.readFile(p)
-  const JSZip = (await import('jszip')).default
-  const zip = await JSZip.loadAsync(buf)
-  const names = Object.keys(zip.files)
-  console.log('   zip entries:', names.join(', '))
-  for (const n of names) {
-    const blob = await zip.files[n].async('uint8array')
-    console.log('   -', n, blob.length, 'bytes')
+function killServerTree(proc) {
+  if (!proc || proc.exitCode !== null || !proc.pid) return
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
+    return
   }
-  if (!names.some((n) => n.startsWith('panel-'))) throw new Error('no panel images in zip')
-})
-await step('preview toggle', async () => {
-  await page.click('button:has-text("Preview")')
-  await page.waitForTimeout(300)
-  await page.click('button:has-text("Back to Editor")')
-  await page.waitForTimeout(200)
-})
+  try { process.kill(-proc.pid, 'SIGTERM') } catch {}
+  proc.kill('SIGTERM')
+}
 
-await step('reload resumes session', async () => {
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('.editor', { timeout: 8000 })
-  await page.waitForTimeout(500)
-  const n = await page.locator('.panel-row').count()
-  if (n < 3) throw new Error('resume failed: expected >=3 panels, got ' + n)
-  console.log('   resumed panels:', n)
-})
+function report() {
+  console.log('\n=== ERRORS (' + errors.length + ') ===')
+  for (const e of errors) console.log(e)
+}
 
-await browser.close()
-server.kill()
-console.log('\n=== ERRORS (' + errors.length + ') ===')
-for (const e of errors) console.log(e)
-process.exit(errors.length ? 1 : 0)
+try {
+  const require = createRequire(import.meta.url)
+  const viteBin = path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
+
+  server = spawn(process.execPath, [viteBin], { cwd: process.cwd(), stdio: 'pipe', detached: process.platform !== 'win32' })
+  server.stdout.on('data', (d) => process.stdout.write('[vite] ' + d.toString()))
+  server.stderr.on('data', (d) => process.stderr.write('[vite-err] ' + d.toString()))
+
+  let url = ''
+  await new Promise((resolve) => {
+    const to = setTimeout(() => { if (!url) { url = 'http://localhost:5173'; resolve() } }, 12000)
+    server.stdout.on('data', (d) => {
+      const m = d.toString().match(/http:\/\/localhost:(\d+)/)
+      if (m && !url) { url = 'http://localhost:' + m[1]; clearTimeout(to); resolve() }
+    })
+  })
+  console.log('using url:', url)
+
+  browser = await chromium.launch()
+  const page = await browser.newPage({ acceptDownloads: true })
+  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()) })
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem('__test_seeded')) {
+        localStorage.clear()
+        indexedDB.deleteDatabase('slice-my-photo')
+        localStorage.setItem('__test_seeded', '1')
+      }
+    } catch {}
+  })
+
+  const step = async (name, fn) => {
+    try { await fn(); console.log('OK:', name) } catch (e) {
+      console.log('FAIL:', name, '-', e.message)
+      errors.push(name + ': ' + e.message)
+      throw new Error('required step "' + name + '" failed: ' + e.message)
+    }
+  }
+
+  await step('goto upload', async () => { await page.goto(url, { waitUntil: 'domcontentloaded' }); await page.waitForSelector('.upload-card', { timeout: 10000 }) })
+  await step('upload image', async () => {
+    await page.setInputFiles('input[type=file]', { name: 'test.png', mimeType: 'image/png', buffer: PNG })
+    await page.waitForFunction(() => { const b = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Continue to Editor')); return !!b && !b.disabled }, undefined, { timeout: 12000 })
+  })
+  await step('continue to editor', async () => {
+    await page.click('button:has-text("Continue to Editor")')
+    await page.waitForSelector('.editor', { timeout: 8000 })
+  })
+  await step('apply Triptych preset', async () => {
+    await page.waitForSelector('.preset-btn')
+    await page.locator('.preset-btn', { hasText: 'Triptych' }).click()
+    await page.waitForTimeout(400)
+    const n = await page.locator('.panel-row').count()
+    if (n < 3) throw new Error('expected >=3 panels, got ' + n)
+    console.log('   panels:', n)
+  })
+  await step('undo and redo layout change', async () => {
+    const undo = page.getByRole('button', { name: /^Undo/ })
+    const redo = page.getByRole('button', { name: /^Redo/ })
+    if (await undo.isDisabled()) throw new Error('undo should be enabled after changing the layout')
+    await undo.click()
+    if (await page.locator('.panel-row').count() !== 0) throw new Error('undo did not remove the preset panels')
+    if (await redo.isDisabled()) throw new Error('redo should be enabled after undo')
+    await page.keyboard.press('Control+Shift+Z')
+    if (await page.locator('.panel-row').count() < 3) throw new Error('redo shortcut did not restore the preset')
+    await page.keyboard.press('Control+Z')
+    if (await page.locator('.panel-row').count() !== 0) throw new Error('undo shortcut did not remove the preset')
+    await redo.click()
+    if (await page.locator('.panel-row').count() < 3) throw new Error('redo button did not restore the preset')
+  })
+  await step('select a panel', async () => {
+    await page.locator('.panel-row').first().click()
+    await page.waitForSelector('.panel-row.selected', { timeout: 3000 })
+  })
+  await step('change wall color', async () => {
+    await page.locator('.card', { hasText: 'Wall Setup' }).locator('.swatch[title="Light Blue"]').click()
+    await page.waitForFunction(() => document.querySelector('.wall-color-hex')?.textContent === '#D6E4F0', undefined, { timeout: 3000 })
+  })
+  await step('enable passepartout', async () => {
+    await page.locator('.toggle', { hasText: 'Use passepartout' }).click({ timeout: 3000 })
+    await page.waitForFunction(() => [...document.querySelectorAll('.toggle')].some((t) => t.textContent.includes('Use passepartout') && t.classList.contains('on')), undefined, { timeout: 3000 })
+    await page.waitForTimeout(200)
+  })
+  await step('open export modal', async () => {
+    await page.click('button:has-text("Export")')
+    await page.waitForSelector('.modal', { timeout: 5000 })
+  })
+  await step('download zip', async () => {
+    await page.locator('.modal').textContent()
+    const dl = page.locator('button:has-text("Download ZIP")')
+    const [d] = await Promise.all([page.waitForEvent('download', { timeout: 25000 }), dl.click()])
+    const p = await d.path()
+    console.log('   saved:', p)
+    const fs = await import('node:fs/promises')
+    const buf = await fs.readFile(p)
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(buf)
+    const names = Object.keys(zip.files)
+    console.log('   zip entries:', names.join(', '))
+    for (const n of names) {
+      const blob = await zip.files[n].async('uint8array')
+      console.log('   -', n, blob.length, 'bytes')
+    }
+    if (!names.some((n) => n.startsWith('panel-'))) throw new Error('no panel images in zip')
+  })
+  await step('preview toggle', async () => {
+    await page.click('button:has-text("Preview")')
+    await page.waitForTimeout(300)
+    await page.click('button:has-text("Back to Editor")')
+    await page.waitForTimeout(200)
+  })
+
+  await step('reload resumes session', async () => {
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.editor', { timeout: 8000 })
+    await page.waitForTimeout(500)
+    const n = await page.locator('.panel-row').count()
+    if (n < 3) throw new Error('resume failed: expected >=3 panels, got ' + n)
+    console.log('   resumed panels:', n)
+  })
+
+  report()
+  exitCode = errors.length ? 1 : 0
+} catch (e) {
+  console.log('\nsmoke test aborted:', e.message)
+  report()
+} finally {
+  try { if (browser) await browser.close() } catch {}
+  killServerTree(server)
+  try { rmSync('./smoke-test.png', { force: true }) } catch {}
+}
+process.exit(exitCode)
