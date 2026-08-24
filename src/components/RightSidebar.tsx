@@ -5,6 +5,7 @@ import { panelGeometry, resolveFrame } from '../lib/geometry'
 import { suggestedOpening } from '../lib/passepartout'
 import { ArrowLeftRightIcon } from 'lucide-react'
 import { CommitNumberField, Segmented, Swatches, Toggle, WallColorPicker } from './ui'
+import { PreflightSummary } from './PreflightSummary'
 
 export function RightSidebar() {
   const unit = useStore((s) => s.unit)
@@ -46,6 +47,8 @@ export function RightSidebar() {
 
   return (
     <aside className="sidebar right">
+      <PreflightSummary />
+
       <div className="card">
         <div className="section-title">Wall Setup</div>
         <div className="field-grid">

@@ -4,6 +4,8 @@ import { saveAs } from 'file-saver'
 import { useStore, computeImagePlacement } from '../store/useStore'
 import { panelGeometry, resolveFrame, toCm, fromCm, BASE_DPI, CM_PER_INCH } from './geometry'
 import { frameHex, matHex } from './frameColors'
+import { computePreflight, sourceCoverageForRect } from './preflight'
+import type { PreflightReport } from './preflight'
 
 export interface ExportOptions {
   format: 'jpeg' | 'png'
@@ -45,19 +47,38 @@ export interface ExportPlan {
   panels: PanelCropSpec[]
   visualization: object | null
   warnings: DpiWarning[]
+  preflight: PreflightReport
 }
 
 export function computePlan(options: ExportOptions): ExportPlan {
   const state = useStore.getState()
   const { panels, frame, perPanelFrame, wall, unit, sourceImage } = state
-  if (!sourceImage || panels.length === 0) return { panels: [], visualization: null, warnings: [] }
+  if (!sourceImage || panels.length === 0) {
+    return {
+      panels: [],
+      visualization: null,
+      warnings: [],
+      preflight: { panels: [], warningCount: 0, errorCount: 0, hasIssues: false },
+    }
+  }
 
   const placement = computeImagePlacement(panels, frame, perPanelFrame, state.image, sourceImage)
   const imgW = sourceImage.nativeWidth
   const imgH = sourceImage.nativeHeight
+  const preflight = computePreflight({
+    panels,
+    frame,
+    perPanelFrame,
+    wall,
+    unit,
+    sourceImage,
+    placement,
+  })
 
   const specs: PanelCropSpec[] = []
-  const warnings: DpiWarning[] = []
+  const warnings: DpiWarning[] = preflight.panels
+    .filter((panel) => panel.dpi < BASE_DPI)
+    .map((panel) => ({ index: panel.index, dpi: Math.round(panel.dpi) }))
 
   panels.forEach((panel, i) => {
     const f = resolveFrame(panel, frame, perPanelFrame)
@@ -84,19 +105,12 @@ export function computePlan(options: ExportOptions): ExportPlan {
     let outH = Math.round(((visHCm + 2 * options.bleedCm) / CM_PER_INCH) * BASE_DPI)
 
     // cap to available source resolution
-    const coveredWpx = Math.max(0, Math.min(relX + relW, imgW) - Math.max(relX, 0))
-    const coveredHpx = Math.max(0, Math.min(relY + relH, imgH) - Math.max(relY, 0))
-    const cap = Math.min(coveredWpx / outW, coveredHpx / outH, 1)
+    const coverage = sourceCoverageForRect({ x: relX, y: relY, w: relW, h: relH }, imgW, imgH)
+    const cap = Math.min(coverage.coveredWidthPx / outW, coverage.coveredHeightPx / outH, 1)
     if (cap > 0 && cap < 1) {
       outW = Math.max(1, Math.round(outW * cap))
       outH = Math.max(1, Math.round(outH * cap))
     }
-
-    // effective DPI (clamped coverage)
-    const dpiW = visWCm > 0 ? coveredWpx / (visWCm / CM_PER_INCH) : 0
-    const dpiH = visHCm > 0 ? coveredHpx / (visHCm / CM_PER_INCH) : 0
-    const dpi = Math.min(dpiW, dpiH)
-    if (dpi > 0 && dpi < BASE_DPI) warnings.push({ index: i, dpi: Math.round(dpi) })
 
     specs.push({
       index: i,
@@ -132,7 +146,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
     }
   }
 
-  return { panels: specs, visualization, warnings }
+  return { panels: specs, visualization, warnings, preflight }
 }
 
 export async function runExport(options: ExportOptions, onProgress: (done: number, total: number) => void): Promise<void> {
