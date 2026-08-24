@@ -31,6 +31,8 @@ export function PanelNode({
   const setPanelOuterPosition = useStore((s) => s.setPanelOuterPosition)
   const setPanelSize = useStore((s) => s.setPanelSize)
   const selectPanel = useStore((s) => s.selectPanel)
+  const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
+  const endHistoryGroup = useStore((s) => s.endHistoryGroup)
 
   const geom = panelGeometry(panel, frame)
   const outer = geom.outer
@@ -89,9 +91,18 @@ export function PanelNode({
     setPanelOuterPosition(panel.id, ox, oy)
   }
 
+  const handleDragStart = () => {
+    beginHistoryGroup()
+  }
+
   const handleDragEnd = () => {
     setSnapLines(null)
     setTip(null)
+    endHistoryGroup()
+  }
+
+  const handleTransformStart = () => {
+    beginHistoryGroup()
   }
 
   const handleTransform = () => {
@@ -127,6 +138,7 @@ export function PanelNode({
     void newInnerX
     void newInnerY
     setTip(null)
+    endHistoryGroup()
   }
 
   // source-pixel crop for the visible region
@@ -147,8 +159,10 @@ export function PanelNode({
         y={outer.y}
         draggable
         onMouseDown={() => selectPanel(panel.id)}
+        onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
+        onTransformStart={handleTransformStart}
         onTransform={handleTransform}
         onTransformEnd={handleTransformEnd}
       >

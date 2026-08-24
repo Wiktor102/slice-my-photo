@@ -54,6 +54,11 @@ interface State {
   zoomToImageToken: number
   canvasSize: { w: number; h: number }
 
+  // History is intentionally kept outside persisted project data. The
+  // snapshots contain only durable, user-editable project settings.
+  canUndo: boolean
+  canRedo: boolean
+
   // actions
   setUnit: (u: Unit) => void
   loadImageFromFile: (file: File) => Promise<void>
@@ -100,8 +105,25 @@ interface State {
   showToast: (msg: string) => void
   loadLayout: (layout: SavedLayout) => void
 
+  undo: () => void
+  redo: () => void
+  beginHistoryGroup: () => void
+  endHistoryGroup: () => void
+
   resetProject: () => void
 }
+
+type ProjectSnapshot = Pick<
+  State,
+  'unit' | 'wall' | 'panels' | 'frame' | 'image' | 'presetActive' | 'gap' | 'currentSizeKey' | 'perPanelFrame'
+>
+
+interface HistoryGroup {
+  before: ProjectSnapshot
+  depth: number
+}
+
+const MAX_HISTORY_ENTRIES = 100
 
 const DEFAULT_FRAME: FrameStyle = {
   edgeWidth: 2,
@@ -123,6 +145,46 @@ const DEFAULT_IMAGE: ImageTransform = {
 }
 
 const DEFAULT_WALL: WallSetup = { width: 300, height: 250, color: '#F5F5F5' }
+
+function cloneProjectSnapshot(snapshot: ProjectSnapshot): ProjectSnapshot {
+  return {
+    unit: snapshot.unit,
+    wall: { ...snapshot.wall },
+    panels: snapshot.panels.map((panel) => ({
+      ...panel,
+      ...(panel.passepartout ? { passepartout: { ...panel.passepartout } } : {}),
+    })),
+    frame: { ...snapshot.frame },
+    image: { ...snapshot.image },
+    presetActive: snapshot.presetActive,
+    gap: snapshot.gap,
+    currentSizeKey: snapshot.currentSizeKey,
+    perPanelFrame: Object.fromEntries(
+      Object.entries(snapshot.perPanelFrame).map(([id, panelFrame]) => [id, {
+        ...panelFrame,
+        passepartout: { ...panelFrame.passepartout },
+      }]),
+    ),
+  }
+}
+
+function projectSnapshot(state: State): ProjectSnapshot {
+  return cloneProjectSnapshot({
+    unit: state.unit,
+    wall: state.wall,
+    panels: state.panels,
+    frame: state.frame,
+    image: state.image,
+    presetActive: state.presetActive,
+    gap: state.gap,
+    currentSizeKey: state.currentSizeKey,
+    perPanelFrame: state.perPanelFrame,
+  })
+}
+
+function snapshotsEqual(a: ProjectSnapshot, b: ProjectSnapshot): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
 
 function defaultSize(unit: Unit): [number, number] {
   return unit === 'cm' ? [40, 60] : [16, 20]
@@ -151,7 +213,42 @@ function normalizePersistedState(value: unknown): unknown {
 
 export const useStore = create<State>()(
   persist(
-    (set, get) => ({
+    (rawSet, get) => {
+      const historyPast: ProjectSnapshot[] = []
+      const historyFuture: ProjectSnapshot[] = []
+      let historyGroup: HistoryGroup | null = null
+
+      const syncHistoryAvailability = () => {
+        rawSet({ canUndo: historyPast.length > 0, canRedo: historyFuture.length > 0 })
+      }
+
+      const commitHistoryEntry = (before: ProjectSnapshot, after: ProjectSnapshot) => {
+        if (snapshotsEqual(before, after)) return
+        historyPast.push(cloneProjectSnapshot(before))
+        if (historyPast.length > MAX_HISTORY_ENTRIES) historyPast.shift()
+        historyFuture.length = 0
+        syncHistoryAvailability()
+      }
+
+      const flushHistoryGroup = () => {
+        if (!historyGroup) return
+        const group = historyGroup
+        historyGroup = null
+        commitHistoryEntry(group.before, projectSnapshot(get()))
+      }
+
+      const set: typeof rawSet = (partial, replace) => {
+        const before = projectSnapshot(get())
+        if (replace) {
+          rawSet(partial as State | ((state: State) => State), true)
+        } else {
+          rawSet(partial as State | Partial<State> | ((state: State) => State | Partial<State>))
+        }
+        if (historyGroup) return
+        commitHistoryEntry(before, projectSnapshot(get()))
+      }
+
+      return {
       screen: 'upload',
       unit: 'cm',
       sourceImage: null,
@@ -183,6 +280,8 @@ export const useStore = create<State>()(
       zoomToFitToken: 0,
       zoomToImageToken: 0,
       canvasSize: { w: 0, h: 0 },
+      canUndo: false,
+      canRedo: false,
 
       setUnit: (u) => {
         const defaultKey = u === 'cm' ? 'cm-40x60' : 'in-16x20'
@@ -190,7 +289,10 @@ export const useStore = create<State>()(
       },
 
       loadImageFromFile: async (file) => {
-        set({ imageLoading: true, imageWarning: null })
+        // Uploading is asynchronous and the source image is intentionally not
+        // part of project history. Keep the loading lifecycle out of history,
+        // including the transform reset that accompanies a new source image.
+        rawSet({ imageLoading: true, imageWarning: null })
         try {
           const dims = await readImageDimensions(file)
           const { proxyUrl, fullUrl } = await buildImageBlobs(file)
@@ -199,7 +301,7 @@ export const useStore = create<State>()(
             ? `This image is low resolution (${dims.width}×${dims.height}px). Prints may look soft at large sizes.`
             : null
           await idbSetImage(img)
-          set({
+          rawSet({
             sourceImage: img,
             imageLoading: false,
             imageWarning: warn,
@@ -207,15 +309,18 @@ export const useStore = create<State>()(
           })
         } catch (e) {
           console.error(e)
-          set({ imageLoading: false, imageWarning: 'Could not load this image. Try a JPEG, PNG, or WebP file.' })
+          rawSet({ imageLoading: false, imageWarning: 'Could not load this image. Try a JPEG, PNG, or WebP file.' })
         }
       },
 
-      restoreImage: (img) => set({ sourceImage: img, screen: 'editor' }),
+      restoreImage: (img) => rawSet({ sourceImage: img, screen: 'editor' }),
 
       clearImage: async () => {
         await idbClearImage()
-        set({
+        // Returning home clears the project as well as the image. Since the
+        // image itself is not undoable, keep this navigation/reset atomic and
+        // out of the project history instead of creating an unusable entry.
+        rawSet({
           sourceImage: null,
           screen: 'upload',
           panels: [],
@@ -227,17 +332,16 @@ export const useStore = create<State>()(
         })
       },
 
-      setScreen: (s) => set({ screen: s }),
+      setScreen: (s) => rawSet({ screen: s }),
 
       setWall: (partial) => {
         const wall = { ...get().wall, ...partial }
         if (wall.width < 10) wall.width = 10
         if (wall.height < 10) wall.height = 10
-        set({ wall })
         // clamp all panels into the new wall
         const { panels, frame, perPanelFrame } = get()
         const clamped = panels.map((p) => clampPanelToWall(p, resolveFrame(p, frame, perPanelFrame), wall.width, wall.height))
-        set({ panels: clamped })
+        set({ wall, panels: clamped })
       },
 
       applyPreset: (key) => {
@@ -258,7 +362,6 @@ export const useStore = create<State>()(
 
       setGap: (g) => {
         const gap = Math.max(0, g)
-        set({ gap })
         const { presetActive } = get()
         if (presetActive) {
           const preset = PRESETS.find((p) => p.key === presetActive)
@@ -266,13 +369,14 @@ export const useStore = create<State>()(
             const { unit, currentSizeKey, frame, wall } = get()
             const panels = instantiatePreset(preset, currentSizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
               .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
-            set({ panels, image: { ...DEFAULT_IMAGE } })
+            set({ gap, panels, image: { ...DEFAULT_IMAGE } })
+            return
           }
         }
+        set({ gap })
       },
 
       setCurrentSizeKey: (key) => {
-        set({ currentSizeKey: key })
         const { presetActive } = get()
         if (presetActive) {
           const preset = PRESETS.find((p) => p.key === presetActive)
@@ -280,9 +384,11 @@ export const useStore = create<State>()(
             const { unit, gap, frame, wall } = get()
             const panels = instantiatePreset(preset, key, unit, gap, frame.edgeWidth, wall.width, wall.height)
               .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
-            set({ panels, image: { ...DEFAULT_IMAGE } })
+            set({ currentSizeKey: key, panels, image: { ...DEFAULT_IMAGE } })
+            return
           }
         }
+        set({ currentSizeKey: key })
       },
 
       addPanel: () => {
@@ -315,13 +421,15 @@ export const useStore = create<State>()(
       selectPanel: (id) => {
         const updates: Partial<State> = { selectedId: id, imageSelected: false }
         if (!id) updates.frame = { ...get().frame, perPanel: false }
-        set(updates)
+        // Selection and its related UI mode are transient; changing them
+        // should never add an undo entry or clone the project snapshot.
+        rawSet(updates)
       },
 
       selectImage: (b) => {
         const updates: Partial<State> = { imageSelected: b, selectedId: b ? null : get().selectedId }
         if (b) updates.frame = { ...get().frame, perPanel: false }
-        set(updates)
+        rawSet(updates)
       },
 
       updatePanel: (id, partial) => {
@@ -491,21 +599,21 @@ export const useStore = create<State>()(
         set({ image: { mode: 'custom', zoom: Math.max(1, Math.min(5, zoom)), panX, panY } }),
       resetImage: () => set({ image: { ...DEFAULT_IMAGE } }),
 
-      setViewport: (partial) => set({ viewport: { ...get().viewport, ...partial } }),
-      requestZoomToFit: () => set({ zoomToFitToken: get().zoomToFitToken + 1 }),
-      requestZoomToImage: () => set({ zoomToImageToken: get().zoomToImageToken + 1 }),
-      setCanvasSize: (size) => set({ canvasSize: size }),
-      toggleGrid: () => set({ showGrid: !get().showGrid }),
-      toggleGapSnap: () => set({ gapSnapEnabled: !get().gapSnapEnabled }),
-      setPreview: (p) => set({ preview: p }),
-      setExportOpen: (o) => set({ exportOpen: o }),
-      setConfirmReset: (c) => set({ confirmReset: c }),
-      setHomeOpen: (c) => set({ homeOpen: c }),
-      setSaveLayoutOpen: (o) => set({ saveLayoutOpen: o }),
-      setLoadLayoutOpen: (o) => set({ loadLayoutOpen: o }),
+      setViewport: (partial) => rawSet({ viewport: { ...get().viewport, ...partial } }),
+      requestZoomToFit: () => rawSet({ zoomToFitToken: get().zoomToFitToken + 1 }),
+      requestZoomToImage: () => rawSet({ zoomToImageToken: get().zoomToImageToken + 1 }),
+      setCanvasSize: (size) => rawSet({ canvasSize: size }),
+      toggleGrid: () => rawSet({ showGrid: !get().showGrid }),
+      toggleGapSnap: () => rawSet({ gapSnapEnabled: !get().gapSnapEnabled }),
+      setPreview: (p) => rawSet({ preview: p }),
+      setExportOpen: (o) => rawSet({ exportOpen: o }),
+      setConfirmReset: (c) => rawSet({ confirmReset: c }),
+      setHomeOpen: (c) => rawSet({ homeOpen: c }),
+      setSaveLayoutOpen: (o) => rawSet({ saveLayoutOpen: o }),
+      setLoadLayoutOpen: (o) => rawSet({ loadLayoutOpen: o }),
       showToast: (msg) => {
-        set({ toast: msg })
-        setTimeout(() => set((s) => (s.toast === msg ? { toast: null } : {})), 2500)
+        rawSet({ toast: msg })
+        setTimeout(() => rawSet((s) => (s.toast === msg ? { toast: null } : {})), 2500)
       },
       loadLayout: (layout) => {
         const prevUnit = get().unit
@@ -529,6 +637,57 @@ export const useStore = create<State>()(
         }
       },
 
+      undo: () => {
+        flushHistoryGroup()
+        const previous = historyPast.pop()
+        if (!previous) {
+          syncHistoryAvailability()
+          return
+        }
+        const current = projectSnapshot(get())
+        historyFuture.unshift(current)
+        const target = cloneProjectSnapshot(previous)
+        rawSet({
+          ...target,
+          canUndo: historyPast.length > 0,
+          canRedo: historyFuture.length > 0,
+        })
+      },
+
+      redo: () => {
+        flushHistoryGroup()
+        const next = historyFuture.shift()
+        if (!next) {
+          syncHistoryAvailability()
+          return
+        }
+        const current = projectSnapshot(get())
+        historyPast.push(current)
+        const target = cloneProjectSnapshot(next)
+        rawSet({
+          ...target,
+          canUndo: historyPast.length > 0,
+          canRedo: historyFuture.length > 0,
+        })
+      },
+
+      beginHistoryGroup: () => {
+        if (historyGroup) {
+          historyGroup.depth += 1
+          return
+        }
+        historyGroup = { before: projectSnapshot(get()), depth: 1 }
+      },
+
+      endHistoryGroup: () => {
+        if (!historyGroup) return
+        if (historyGroup.depth > 1) {
+          historyGroup.depth -= 1
+          return
+        }
+        flushHistoryGroup()
+      },
+
       resetProject: () =>
         set({
           panels: [],
@@ -545,7 +704,8 @@ export const useStore = create<State>()(
           exportOpen: false,
           confirmReset: false,
         }),
-    }),
+    }
+    },
     {
       name: 'slice-my-photo-state',
       version: 2,

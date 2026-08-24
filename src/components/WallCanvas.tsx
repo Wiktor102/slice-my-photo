@@ -68,6 +68,8 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const selectPanel = useStore((s) => s.selectPanel)
   const selectImage = useStore((s) => s.selectImage)
   const setCanvasSize = useStore((s) => s.setCanvasSize)
+  const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
+  const endHistoryGroup = useStore((s) => s.endHistoryGroup)
 
   const placement = useImagePlacement()
   const spaceRef = useRef(false)
@@ -243,6 +245,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   }
   const handleImageDragStart = () => {
     selectImage(true)
+    beginHistoryGroup()
     // switch to custom mode using the currently displayed scale/pan so the
     // transition from fit/fill -> custom is seamless
     const zoom = fitScale > 0 ? placement.scale / fitScale : 1
@@ -255,6 +258,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   }
   const handleImageDragEnd = () => {
     setTip(null)
+    endHistoryGroup()
   }
 
   // --- image corner-handle resize (writes to store every move -> live crops) ---
@@ -283,6 +287,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
       fitScale,
     }
     selectImage(true)
+    beginHistoryGroup()
     // switch to custom mode at current display values so fit/fill -> custom is seamless
     const zoom = fitScale > 0 ? placement.scale / fitScale : 1
     setImageTransform(zoom, placement.panX, placement.panY)
@@ -315,6 +320,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
       window.removeEventListener('pointerup', up)
       imgResizeRef.current = null
       setTip(null)
+      endHistoryGroup()
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
