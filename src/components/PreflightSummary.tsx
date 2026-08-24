@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { computePreflight } from '../lib/preflight'
 import { useImagePlacement, useStore } from '../store/useStore'
@@ -56,17 +56,8 @@ export function PreflightSummary() {
     return computePreflight({ ...settled, sourceImage: settled.sourceImage })
   }, [settled])
 
-  // Collapsed by default to keep the sidebar calm; expands itself the first
-  // time errors appear so "fix before export" is never missed. After that the
-  // user stays in control until the errors clear and reappear.
+  // Keep the details collapsed until the user asks to see them.
   const [open, setOpen] = useState(false)
-  const hadErrors = useRef(false)
-  useEffect(() => {
-    if (!report) return
-    const hasErrors = report.errorCount > 0
-    if (hasErrors && !hadErrors.current) setOpen(true)
-    hadErrors.current = hasErrors
-  }, [report])
 
   if (!sourceImage) {
     return (
