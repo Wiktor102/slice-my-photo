@@ -115,10 +115,7 @@ export function PreflightSummary() {
         onClick={() => setOpen((o) => !o)}
       >
         <span className={`preflight-badge preflight-badge-${overallStatus}`} aria-hidden="true">{statusIcon(overallStatus)}</span>
-        <div className="preflight-heading-copy">
-          <div className="section-title" id="preflight-title">Print preflight</div>
-          <strong>{overallLabel}</strong>
-        </div>
+        <strong className="preflight-status" id="preflight-title">{overallLabel}</strong>
         <span className="preflight-counts">
           {counts}
         </span>

@@ -437,17 +437,9 @@ button.big { padding: 10px 16px; font-size: 15px; }
   display: flex;
   flex-direction: column;
 }
-.preflight-heading-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.preflight-status {
   min-width: 0;
-}
-.preflight-heading-copy .section-title {
-  margin-bottom: 0;
-}
-.preflight-heading-copy strong {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 .preflight-badge,
