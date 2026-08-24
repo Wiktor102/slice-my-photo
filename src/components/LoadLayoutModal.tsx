@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { PencilIcon } from 'lucide-react'
+import { PencilIcon, Trash2Icon } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { getAllLayouts, deleteLayout, renameLayout } from '../lib/layouts'
 import type { SavedLayout } from '../types'
@@ -154,9 +154,10 @@ export function LoadLayoutModal() {
                         <button
                           className="layout-del"
                           title="Delete layout"
+                          aria-label={`Delete layout "${layout.name}"`}
                           onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(layout.id) }}
                         >
-                          &#x1f5d1;
+                          <Trash2Icon size={16} strokeWidth={1.8} aria-hidden="true" />
                         </button>
                       </div>
                     )}

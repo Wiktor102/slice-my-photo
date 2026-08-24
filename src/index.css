@@ -637,10 +637,19 @@ button.big { padding: 10px 16px; font-size: 15px; }
   font-size: 14px;
 }
 .panel-row .del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  height: 28px;
   background: transparent;
   border: none;
-  padding: 2px 4px;
+  padding: 0;
   color: var(--text-dim);
+}
+.panel-row .del svg,
+.layout-del svg {
+  display: block;
 }
 .panel-row .del:hover { color: var(--danger); }
 
@@ -879,11 +888,15 @@ button.big { padding: 10px 16px; font-size: 15px; }
   font-size: 11px;
 }
 .layout-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   background: transparent;
   border: none;
-  padding: 4px 6px;
+  padding: 0;
   color: var(--text-dim);
-  font-size: 15px;
   flex-shrink: 0;
 }
 .layout-del:hover {
