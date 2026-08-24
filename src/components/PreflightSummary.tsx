@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDownIcon } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDownIcon, X } from 'lucide-react'
 import { computePreflight } from '../lib/preflight'
 import { useImagePlacement, useStore } from '../store/useStore'
 import { useDebouncedValue } from '../lib/useDebouncedValue'
@@ -13,10 +13,10 @@ const STATUS_LABEL: Record<PreflightStatus, string> = {
   error: 'Fix needed',
 }
 
-function statusIcon(status: PreflightStatus): string {
-  if (status === 'good') return '✓'
-  if (status === 'warning') return '!'
-  return '×'
+function statusIcon(status: PreflightStatus, size: number) {
+  if (status === 'good') return <Check size={size} strokeWidth={3} aria-hidden="true" />
+  if (status === 'warning') return <AlertTriangle size={size} strokeWidth={2.5} aria-hidden="true" />
+  return <X size={size} strokeWidth={3} aria-hidden="true" />
 }
 
 function formatDpi(dpi: number): string {
@@ -114,7 +114,7 @@ export function PreflightSummary() {
         aria-controls="preflight-body"
         onClick={() => setOpen((o) => !o)}
       >
-        <span className={`preflight-badge preflight-badge-${overallStatus}`} aria-hidden="true">{statusIcon(overallStatus)}</span>
+        <span className={`preflight-badge preflight-badge-${overallStatus}`} aria-hidden="true">{statusIcon(overallStatus, 13)}</span>
         <strong className="preflight-status" id="preflight-title">{overallLabel}</strong>
         <span className="preflight-counts">
           {counts}
@@ -142,7 +142,7 @@ export function PreflightSummary() {
               return (
                 <div className={`preflight-panel preflight-panel-${panel.status}`} key={panel.panelId}>
                   <div className="preflight-panel-row">
-                    <span className={`preflight-dot preflight-dot-${panel.status}`} aria-label={STATUS_LABEL[panel.status]}>{statusIcon(panel.status)}</span>
+                    <span className={`preflight-dot preflight-dot-${panel.status}`} aria-label={STATUS_LABEL[panel.status]}>{statusIcon(panel.status, 10)}</span>
                     <span className="preflight-panel-name">Panel {panel.index + 1}</span>
                     <span className={`preflight-panel-dpi preflight-dpi-${panel.dpiBand}`}>{formatDpi(panel.dpi)}</span>
                     <span className="preflight-panel-coverage">{Math.round(panel.coverage.coverageRatio * 100)}%</span>
