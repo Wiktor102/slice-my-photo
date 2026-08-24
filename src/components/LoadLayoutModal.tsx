@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { PencilIcon } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { getAllLayouts, deleteLayout, renameLayout } from '../lib/layouts'
 import type { SavedLayout } from '../types'
@@ -12,6 +13,7 @@ export function LoadLayoutModal() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
+  const [renameError, setRenameError] = useState<{ id: string; message: string } | null>(null)
   const [confirmLoad, setConfirmLoad] = useState<SavedLayout | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
 
@@ -32,11 +34,21 @@ export function LoadLayoutModal() {
 
   const handleRenameCommit = (id: string) => {
     const trimmed = editText.trim()
-    if (trimmed) {
-      renameLayout(id, trimmed)
-      refresh()
+    const result = renameLayout(id, trimmed)
+    if (!result.ok) {
+      setRenameError({ id, message: result.error })
+      return
     }
+
+    refresh()
     setEditingId(null)
+    setRenameError(null)
+  }
+
+  const handleRenameStart = (layout: SavedLayout) => {
+    setEditingId(layout.id)
+    setEditText(layout.name)
+    setRenameError(null)
   }
 
   const handleRowClick = (layout: SavedLayout) => {
@@ -97,31 +109,48 @@ export function LoadLayoutModal() {
                         <div
                           className="layout-row-main"
                           onClick={() => handleRowClick(layout)}
-                          onDoubleClick={(e) => {
-                            e.stopPropagation()
-                            setEditingId(layout.id)
-                            setEditText(layout.name)
-                          }}
                         >
                           {editingId === layout.id ? (
-                            <input
-                              ref={editRef}
-                              type="text"
-                              value={editText}
-                              onChange={(e) => setEditText(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRenameCommit(layout.id)
-                                if (e.key === 'Escape') setEditingId(null)
-                              }}
-                              onBlur={() => handleRenameCommit(layout.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{ fontSize: 13, padding: '2px 6px' }}
-                            />
+                            <>
+                              <input
+                                ref={editRef}
+                                type="text"
+                                value={editText}
+                                onChange={(e) => {
+                                  setEditText(e.target.value)
+                                  setRenameError(null)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleRenameCommit(layout.id)
+                                  if (e.key === 'Escape') {
+                                    setEditingId(null)
+                                    setRenameError(null)
+                                  }
+                                }}
+                                onBlur={() => handleRenameCommit(layout.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-invalid={renameError?.id === layout.id}
+                                style={{ fontSize: 13, padding: '2px 6px' }}
+                              />
+                              {renameError?.id === layout.id && (
+                                <span className="layout-rename-error">{renameError.message}</span>
+                              )}
+                            </>
                           ) : (
                             <span className="layout-name">{layout.name}</span>
                           )}
                           <span className="layout-date">Saved {formatDate(layout.savedAt)}</span>
                         </div>
+                        {editingId !== layout.id && (
+                          <button
+                            className="layout-rename"
+                            title="Rename layout"
+                            aria-label={`Rename layout "${layout.name}"`}
+                            onClick={(e) => { e.stopPropagation(); handleRenameStart(layout) }}
+                          >
+                            <PencilIcon size={14} aria-hidden="true" />
+                          </button>
+                        )}
                         <button
                           className="layout-del"
                           title="Delete layout"
