@@ -26,9 +26,9 @@ The project is built with React 19, TypeScript, and Vite. Canvas rendering is ha
 
 ## Development
 
-Install the dependencies with `npm install`, then start the development server with `npm run dev`. The application opens at `http://localhost:5173`. To create a production build, run `npm run build` — the output lands in the `dist/` directory and can be previewed locally with `npm run preview`.
+Install the dependencies with `pnpm install`, then start the development server with `pnpm dev`. The application opens at `http://localhost:5173`. To create a production build, run `pnpm build` — the output lands in the `dist/` directory and can be previewed locally with `pnpm preview`.
 
-Run `npm run lint` to check the code with ESLint. A Playwright smoke test is available under `scripts/smoke.mjs` — it uploads a test image, applies a preset, adjusts styling, exports a ZIP, and verifies session persistence. Before running it, make sure Playwright browsers are installed with `npx playwright install chromium`.
+Run `pnpm lint` to check the code with ESLint. A Playwright smoke test is available under `scripts/smoke.mjs` — it uploads a test image, applies a preset, adjusts styling, exports a ZIP, and verifies session persistence. Before running it, make sure Playwright browsers are installed with `pnpm exec playwright install chromium`.
 
 **Contributions are welcome**.
 

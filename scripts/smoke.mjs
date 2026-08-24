@@ -38,7 +38,7 @@ function makePng(w, h, r, g, b) {
 const PNG = makePng(400, 600, 90, 140, 200)
 writeFileSync('./smoke-test.png', PNG)
 
-const server = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev'], { cwd: process.cwd(), stdio: 'pipe', shell: true })
+const server = spawn(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['dev'], { cwd: process.cwd(), stdio: 'pipe', shell: true })
 server.stdout.on('data', (d) => process.stdout.write('[vite] ' + d.toString()))
 server.stderr.on('data', (d) => process.stderr.write('[vite-err] ' + d.toString()))
 
