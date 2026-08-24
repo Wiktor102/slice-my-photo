@@ -82,7 +82,7 @@ export interface WallSetup {
 
 export interface ImageTransform {
   mode: ImageMode
-  /** zoom multiplier over the fit scale, range [1, 3] */
+  /** zoom multiplier over the fit scale, range [1, 5] */
   zoom: number
   /** image top-left offset in wall units */
   panX: number

@@ -452,7 +452,7 @@ export const useStore = create<State>()(
       setImageMode: (mode) => set({ image: { ...get().image, mode } }),
       setImageZoom: (z) =>
         set((state) => {
-          const newZoom = Math.max(1, Math.min(3, z))
+          const newZoom = Math.max(1, Math.min(5, z))
           const { image, panels, frame, perPanelFrame } = state
           const bbox = (() => {
             if (panels.length === 0) return null
@@ -488,7 +488,7 @@ export const useStore = create<State>()(
         }),
       setImagePan: (panX, panY) => set({ image: { ...get().image, mode: 'custom', panX, panY } }),
       setImageTransform: (zoom, panX, panY) =>
-        set({ image: { mode: 'custom', zoom: Math.max(1, Math.min(3, zoom)), panX, panY } }),
+        set({ image: { mode: 'custom', zoom: Math.max(1, Math.min(5, zoom)), panX, panY } }),
       resetImage: () => set({ image: { ...DEFAULT_IMAGE } }),
 
       setViewport: (partial) => set({ viewport: { ...get().viewport, ...partial } }),

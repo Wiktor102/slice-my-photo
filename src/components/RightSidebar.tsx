@@ -264,7 +264,7 @@ export function RightSidebar() {
             <input
               type="range"
               min={1}
-              max={3}
+              max={5}
               step={0.01}
               value={image.zoom}
               onChange={(e) => setImageZoom(Number(e.target.value))}
