@@ -448,15 +448,6 @@ export function computeSnaps(ctx: SnapContext): SnapResult {
   }
 }
 
-/**
- * Effective DPI for a panel given the image scale (wall-cm per source-px).
- */
-export function effectiveDpi(visibleWCm: number, scale: number): number {
-  if (scale <= 0) return 0
-  const sourcePixelsForPanel = visibleWCm / scale
-  return sourcePixelsForPanel / (visibleWCm / CM_PER_INCH)
-}
-
 export function targetPixels(visibleWCm: number, bleedCm: number): number {
   return Math.round(((visibleWCm + bleedCm * 2) / CM_PER_INCH) * BASE_DPI)
 }

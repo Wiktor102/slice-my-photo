@@ -83,7 +83,6 @@ self.onmessage = async (e: MessageEvent<Request>) => {
       drawClipped(ctx, bitmap, p.relX, p.relY, p.relW, p.relH, p.outW, p.outH, p.mime === 'image/png')
       const outBlob = await canvas.convertToBlob({ type: p.mime, quality: p.quality })
       ;(self as unknown as Worker).postMessage({ kind: 'panel', index: p.index, name: p.name, blob: outBlob })
-      ;(self as unknown as Worker).postMessage({ kind: 'progress', done: 1 })
     }
 
     if (visualization) {

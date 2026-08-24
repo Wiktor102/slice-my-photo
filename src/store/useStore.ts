@@ -13,7 +13,7 @@ import type {
   WallSetup,
 } from '../types'
 import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
-import { findPreset, getPreset } from '../lib/frameSizes'
+import { findPreset } from '../lib/frameSizes'
 import { clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
@@ -763,6 +763,3 @@ export function computeImagePlacement(
   }
   return { scale, ...defaultPan(bbox, scale, sourceImage), fitScale }
 }
-
-// ensure getPreset import is used (kept for potential external use)
-void getPreset
