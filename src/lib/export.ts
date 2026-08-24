@@ -6,6 +6,9 @@ import { panelGeometry, resolveFrame, toCm, fromCm, BASE_DPI, CM_PER_INCH } from
 import { frameHex, matHex } from './frameColors'
 import { computePreflight, sourceCoverageForRect } from './preflight'
 import type { PreflightReport } from './preflight'
+import type { ExportWorkerRequest, PanelCropSpec, VisPanel, VisSpec } from './exportTypes'
+
+export type { PanelCropSpec } from './exportTypes'
 
 export interface ExportOptions {
   format: 'jpeg' | 'png'
@@ -20,32 +23,9 @@ export interface DpiWarning {
   dpi: number
 }
 
-export interface PanelCropSpec {
-  index: number
-  name: string
-  relX: number
-  relY: number
-  relW: number
-  relH: number
-  outW: number
-  outH: number
-  mime: 'image/jpeg' | 'image/png'
-  quality: number
-}
-
-interface VisPanel {
-  outerX: number; outerY: number; outerW: number; outerH: number
-  innerX: number; innerY: number; innerW: number; innerH: number
-  visX: number; visY: number; visW: number; visH: number
-  frameColor: string
-  matColor: string | null
-  shadow: boolean
-  number: number
-}
-
 export interface ExportPlan {
   panels: PanelCropSpec[]
-  visualization: object | null
+  visualization: VisSpec | null
   warnings: DpiWarning[]
   preflight: PreflightReport
 }
@@ -122,7 +102,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
     })
   })
 
-  let visualization: object | null = null
+  let visualization: VisSpec | null = null
   if (options.includeVisualization) {
     const pxPerUnit = 1200 / Math.max(wall.width, wall.height)
     const visPanels: VisPanel[] = panels.map((panel, i) => {
@@ -183,11 +163,12 @@ export async function runExport(options: ExportOptions, onProgress: (done: numbe
       }
     }
     worker.onerror = (err) => reject(err)
-    worker.postMessage({
+    const request: ExportWorkerRequest = {
       imageUrl: sourceImage.fullUrl,
       panels: plan.panels,
       visualization: plan.visualization,
-    })
+    }
+    worker.postMessage(request)
   })
   worker.terminate()
 

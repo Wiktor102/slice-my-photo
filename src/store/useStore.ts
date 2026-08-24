@@ -14,7 +14,7 @@ import type {
 } from '../types'
 import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
 import { findPreset } from '../lib/frameSizes'
-import { clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
+import { boundingBox, clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
@@ -248,6 +248,14 @@ export const useStore = create<State>()(
         commitHistoryEntry(before, projectSnapshot(get()))
       }
 
+      const buildPresetPanels = (presetKey: string, sizeKey: string, gap: number): Panel[] | null => {
+        const preset = PRESETS.find((p) => p.key === presetKey)
+        if (!preset) return null
+        const { unit, frame, wall } = get()
+        return instantiatePreset(preset, sizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
+          .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
+      }
+
       return {
       screen: 'upload',
       unit: 'cm',
@@ -345,17 +353,14 @@ export const useStore = create<State>()(
       },
 
       applyPreset: (key) => {
-        const preset = PRESETS.find((p) => p.key === key)
-        if (!preset) return
-        const { unit, currentSizeKey, gap, frame, wall } = get()
-        const panels = instantiatePreset(preset, currentSizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
-          .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
+        const panels = buildPresetPanels(key, get().currentSizeKey, get().gap)
+        if (!panels) return
         set({
           panels,
           presetActive: key,
           selectedId: null,
           perPanelFrame: {},
-          frame: { ...frame, perPanel: false },
+          frame: { ...get().frame, perPanel: false },
           image: { ...DEFAULT_IMAGE },
         })
       },
@@ -363,32 +368,22 @@ export const useStore = create<State>()(
       setGap: (g) => {
         const gap = Math.max(0, g)
         const { presetActive } = get()
-        if (presetActive) {
-          const preset = PRESETS.find((p) => p.key === presetActive)
-          if (preset) {
-            const { unit, currentSizeKey, frame, wall } = get()
-            const panels = instantiatePreset(preset, currentSizeKey, unit, gap, frame.edgeWidth, wall.width, wall.height)
-              .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
-            set({ gap, panels, image: { ...DEFAULT_IMAGE } })
-            return
-          }
+        const panels = presetActive ? buildPresetPanels(presetActive, get().currentSizeKey, gap) : null
+        if (!presetActive || !panels) {
+          set({ gap })
+          return
         }
-        set({ gap })
+        set({ gap, panels, image: { ...DEFAULT_IMAGE } })
       },
 
       setCurrentSizeKey: (key) => {
-        const { presetActive } = get()
-        if (presetActive) {
-          const preset = PRESETS.find((p) => p.key === presetActive)
-          if (preset) {
-            const { unit, gap, frame, wall } = get()
-            const panels = instantiatePreset(preset, key, unit, gap, frame.edgeWidth, wall.width, wall.height)
-              .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
-            set({ currentSizeKey: key, panels, image: { ...DEFAULT_IMAGE } })
-            return
-          }
+        const { presetActive, gap } = get()
+        const panels = presetActive ? buildPresetPanels(presetActive, key, gap) : null
+        if (!presetActive || !panels) {
+          set({ currentSizeKey: key })
+          return
         }
-        set({ currentSizeKey: key })
+        set({ currentSizeKey: key, panels, image: { ...DEFAULT_IMAGE } })
       },
 
       addPanel: () => {
@@ -562,18 +557,9 @@ export const useStore = create<State>()(
         set((state) => {
           const newZoom = Math.max(1, Math.min(5, z))
           const { image, panels, frame, perPanelFrame } = state
-          const bbox = (() => {
-            if (panels.length === 0) return null
-            const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-            for (const g of geoms) {
-              minX = Math.min(minX, g.visible.x)
-              minY = Math.min(minY, g.visible.y)
-              maxX = Math.max(maxX, g.visible.x + g.visible.w)
-              maxY = Math.max(maxY, g.visible.y + g.visible.h)
-            }
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
-          })()
+          const bbox = panels.length === 0
+            ? null
+            : boundingBox(panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame))))
           if (image.mode !== 'custom' || !bbox) {
             const fitScale = bbox && state.sourceImage
               ? imageScaleForMode('fit', bbox, state.sourceImage, 1) : 1
@@ -748,14 +734,8 @@ export function computeImagePlacement(
 ): { scale: number; panX: number; panY: number; fitScale: number } {
   if (!sourceImage || panels.length === 0) return { scale: 1, panX: 0, panY: 0, fitScale: 1 }
   const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const g of geoms) {
-    minX = Math.min(minX, g.visible.x)
-    minY = Math.min(minY, g.visible.y)
-    maxX = Math.max(maxX, g.visible.x + g.visible.w)
-    maxY = Math.max(maxY, g.visible.y + g.visible.h)
-  }
-  const bbox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  const bbox = boundingBox(geoms)
+  if (!bbox) return { scale: 1, panX: 0, panY: 0, fitScale: 1 }
   const fitScale = imageScaleForMode('fit', bbox, sourceImage, 1)
   const scale = imageScaleForMode(image.mode, bbox, sourceImage, image.zoom)
   if (image.mode === 'custom') {

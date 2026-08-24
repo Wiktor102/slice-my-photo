@@ -1,46 +1,6 @@
 /// <reference lib="webworker" />
 
-interface PanelCropSpec {
-  index: number
-  name: string
-  relX: number
-  relY: number
-  relW: number
-  relH: number
-  outW: number
-  outH: number
-  mime: 'image/jpeg' | 'image/png'
-  quality: number
-}
-
-interface VisPanel {
-  outerX: number; outerY: number; outerW: number; outerH: number
-  innerX: number; innerY: number; innerW: number; innerH: number
-  visX: number; visY: number; visW: number; visH: number
-  frameColor: string
-  matColor: string | null
-  shadow: boolean
-  number: number
-}
-
-interface VisSpec {
-  wallW: number
-  wallH: number
-  wallColor: string
-  pxPerUnit: number
-  imgNativeW: number
-  imgNativeH: number
-  panX: number
-  panY: number
-  scale: number
-  panels: VisPanel[]
-}
-
-interface Request {
-  imageUrl: string
-  panels: PanelCropSpec[]
-  visualization: VisSpec | null
-}
+import type { ExportWorkerRequest } from './exportTypes'
 
 function drawClipped(
   ctx: OffscreenCanvasRenderingContext2D,
@@ -70,7 +30,7 @@ function drawClipped(
   ctx.drawImage(bitmap, sx0, sy0, srcW, srcH, destX, destY, destW, destH)
 }
 
-self.onmessage = async (e: MessageEvent<Request>) => {
+self.onmessage = async (e: MessageEvent<ExportWorkerRequest>) => {
   const { imageUrl, panels, visualization } = e.data
   try {
     const resp = await fetch(imageUrl)
