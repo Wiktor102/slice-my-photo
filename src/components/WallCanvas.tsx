@@ -43,7 +43,6 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const [imageEl, setImageEl] = useState<HTMLImageElement | undefined>(undefined)
   const [snapLines, setSnapLines] = useState<SnapLines | null>(null)
   const [tip, setTip] = useState<string | null>(null)
-  const [mouse, setMouse] = useState({ x: 0, y: 0 })
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [imageHovered, setImageHovered] = useState(false)
 
@@ -70,6 +69,8 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const endHistoryGroup = useStore((s) => s.endHistoryGroup)
 
   const placement = useImagePlacement()
+  const tipRef = useRef<HTMLDivElement>(null)
+  const pointerRef = useRef({ x: 0, y: 0 })
   const spaceRef = useRef(false)
   const dragStartRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 })
   const prevImageTokenRef = useRef(0)
@@ -88,6 +89,12 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   const isPreview = forPreview || preview
   const scale = viewport.scale
+
+  useLayoutEffect(() => {
+    if (!tip || !tipRef.current) return
+    tipRef.current.style.left = `${pointerRef.current.x + 14}px`
+    tipRef.current.style.top = `${pointerRef.current.y + 14}px`
+  }, [tip])
 
   // measure container
   useLayoutEffect(() => {
@@ -334,7 +341,13 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
       className="main-area"
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect()
-        setMouse({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        pointerRef.current = { x, y }
+        if (tipRef.current) {
+          tipRef.current.style.left = `${x + 14}px`
+          tipRef.current.style.top = `${y + 14}px`
+        }
       }}
       style={{ cursor: !spaceHeld && imageHovered ? 'move' : 'grab' }}
     >
@@ -526,7 +539,11 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
       </Stage>
 
       {!isPreview && tip && (
-        <div className="dimension-tip" style={{ left: mouse.x + 14, top: mouse.y + 14 }}>
+        <div
+          ref={tipRef}
+          className="dimension-tip"
+          style={{ left: 14, top: 14 }}
+        >
           {tip}
         </div>
       )}
