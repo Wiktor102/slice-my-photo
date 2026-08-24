@@ -450,7 +450,7 @@ button.big { padding: 10px 16px; font-size: 15px; }
   flex: 0 0 auto;
   border-radius: 50%;
   font-weight: 700;
-  line-height: 1;
+  line-height: 0;
 }
 .preflight-badge {
   width: 22px;
