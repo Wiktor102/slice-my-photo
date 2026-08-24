@@ -54,6 +54,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const frame = useStore((s) => s.frame)
   const perPanelFrame = useStore((s) => s.perPanelFrame)
   const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
   const imageSelected = useStore((s) => s.imageSelected)
   const viewport = useStore((s) => s.viewport)
   const showGrid = useStore((s) => s.showGrid)
@@ -407,13 +408,19 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
             {/* panels. Selected rendered last for z-order. */}
             {panels
               .slice()
-              .sort((a, b) => (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0))
+              .sort((a, b) => {
+                const aSelected = selectedIds.includes(a.id)
+                const bSelected = selectedIds.includes(b.id)
+                if (aSelected !== bSelected) return aSelected ? 1 : -1
+                return (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0)
+              })
               .map((p) => (
                 <PanelNode
                   key={p.id}
                   panel={p}
                   frame={resolveFrame(p, frame, perPanelFrame)}
-                  selected={!isPreview && selectedId === p.id}
+                  selected={!isPreview && selectedIds.includes(p.id)}
+                  transformable={!isPreview && selectedId === p.id}
                   image={imageEl}
                   sourceImage={sourceImage}
                   scale={placement.scale}

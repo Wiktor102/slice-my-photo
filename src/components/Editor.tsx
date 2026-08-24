@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { TopBar } from './TopBar'
 import { LeftSidebar } from './LeftSidebar'
@@ -24,6 +25,36 @@ export function Editor() {
   const clearImage = useStore((s) => s.clearImage)
   const requestZoomToFit = useStore((s) => s.requestZoomToFit)
   const requestZoomToImage = useStore((s) => s.requestZoomToImage)
+  const selectedIds = useStore((s) => s.selectedIds)
+  const imageSelected = useStore((s) => s.imageSelected)
+  const nudgeSelectedPanels = useStore((s) => s.nudgeSelectedPanels)
+  const deleteSelectedPanels = useStore((s) => s.deleteSelectedPanels)
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || preview || imageSelected || selectedIds.length === 0) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, button, [contenteditable="true"]')) return
+      const del = event.key === 'Delete' || event.key === 'Backspace'
+      if (del) {
+        event.preventDefault()
+        deleteSelectedPanels()
+        return
+      }
+      const deltas: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      }
+      const delta = deltas[event.key]
+      if (!delta) return
+      event.preventDefault()
+      nudgeSelectedPanels(delta[0], delta[1], event.shiftKey)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [deleteSelectedPanels, imageSelected, nudgeSelectedPanels, preview, selectedIds.length])
 
   return (
     <>

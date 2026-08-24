@@ -12,6 +12,7 @@ export function RightSidebar() {
   const setWall = useStore((s) => s.setWall)
   const panels = useStore((s) => s.panels)
   const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
   const frame = useStore((s) => s.frame)
   const perPanelFrame = useStore((s) => s.perPanelFrame)
   const image = useStore((s) => s.image)
@@ -21,6 +22,11 @@ export function RightSidebar() {
   const updatePanel = useStore((s) => s.updatePanel)
   const orientPanel = useStore((s) => s.orientPanel)
   const deletePanel = useStore((s) => s.deletePanel)
+  const deleteSelectedPanels = useStore((s) => s.deleteSelectedPanels)
+  const duplicateSelectedPanels = useStore((s) => s.duplicateSelectedPanels)
+  const alignSelectedPanels = useStore((s) => s.alignSelectedPanels)
+  const distributeSelectedPanels = useStore((s) => s.distributeSelectedPanels)
+  const centerSelectedPanels = useStore((s) => s.centerSelectedPanels)
   const setFrame = useStore((s) => s.setFrame)
   const resetFrameToGlobal = useStore((s) => s.resetFrameToGlobal)
   const updatePassepartout = useStore((s) => s.updatePassepartout)
@@ -36,6 +42,7 @@ export function RightSidebar() {
   const displayFrame = frame.perPanel && selFrame ? selFrame : frame
   const passepartout = selFrame?.passepartout ?? null
   const oneSizeSmaller = selected ? suggestedOpening(selected) : null
+  const selectedCount = selectedIds.length
 
   const colorOptions = Object.entries(FRAME_COLORS).map(([key, v]) => ({ key, label: v.label, hex: key === 'custom' ? displayFrame.customColor : v.hex }))
   const displayMatKey = frame.perPanel && selFrame ? selFrame.passepartout.colorKey : frame.matColorKey
@@ -55,6 +62,38 @@ export function RightSidebar() {
           <WallColorPicker color={wall.color} onChange={(c) => setWall({ color: c })} />
         </div>
       </div>
+
+      {selectedCount > 0 && (
+        <div className="card layout-tools">
+          <div className="section-title">Layout Tools</div>
+          <div className="hint layout-selection-hint">
+            {selectedCount} panel{selectedCount === 1 ? '' : 's'} selected · Shift/Ctrl/Cmd-click to add
+          </div>
+          <div className="layout-tool-row">
+            <button onClick={duplicateSelectedPanels} disabled={panels.length >= 8} title="Duplicate selected panels with a small offset">Duplicate</button>
+            <button onClick={centerSelectedPanels} title="Center the selected group on the wall">Center on wall</button>
+          </div>
+          <div className="layout-tool-group">
+            <span>Horizontal</span>
+            <div className="layout-tool-row">
+              <button onClick={() => alignSelectedPanels('horizontal', 'start')} title="Align selected frames by their left edges">Left</button>
+              <button onClick={() => alignSelectedPanels('horizontal', 'center')} title="Align selected frame centers horizontally">Center</button>
+              <button onClick={() => alignSelectedPanels('horizontal', 'end')} title="Align selected frames by their right edges">Right</button>
+              <button onClick={() => distributeSelectedPanels('horizontal')} disabled={selectedCount < 3} title="Distribute selected frames evenly from left to right">Distribute</button>
+            </div>
+          </div>
+          <div className="layout-tool-group">
+            <span>Vertical</span>
+            <div className="layout-tool-row">
+              <button onClick={() => alignSelectedPanels('vertical', 'start')} title="Align selected frames by their top edges">Top</button>
+              <button onClick={() => alignSelectedPanels('vertical', 'center')} title="Align selected frame centers vertically">Middle</button>
+              <button onClick={() => alignSelectedPanels('vertical', 'end')} title="Align selected frames by their bottom edges">Bottom</button>
+              <button onClick={() => distributeSelectedPanels('vertical')} disabled={selectedCount < 3} title="Distribute selected frames evenly from top to bottom">Distribute</button>
+            </div>
+          </div>
+          <div className="hint layout-key-hint">Arrow keys nudge · Shift + Arrow moves farther</div>
+        </div>
+      )}
 
       {selected && selFrame && selGeom && (
         <div className="card">
@@ -195,7 +234,12 @@ export function RightSidebar() {
           )}
           <div className="row" style={{ marginTop: 8 }}>
             <div className="spacer" />
-            <button className="danger" onClick={() => deletePanel(selected.id)}>Delete</button>
+            <button
+              className="danger"
+              onClick={() => selectedCount > 1 ? deleteSelectedPanels() : deletePanel(selected.id)}
+            >
+              {selectedCount > 1 ? `Delete ${selectedCount} panels` : 'Delete'}
+            </button>
           </div>
         </div>
       )}

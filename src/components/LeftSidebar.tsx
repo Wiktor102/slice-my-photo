@@ -7,7 +7,7 @@ import { PresetIcon } from './PresetIcon'
 export function LeftSidebar() {
   const unit = useStore((s) => s.unit)
   const panels = useStore((s) => s.panels)
-  const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
   const presetActive = useStore((s) => s.presetActive)
   const gap = useStore((s) => s.gap)
   const frame = useStore((s) => s.frame)
@@ -77,8 +77,9 @@ export function LeftSidebar() {
               return (
                 <div
                   key={p.id}
-                  className={`panel-row ${selectedId === p.id ? 'selected' : ''}`}
-                  onClick={() => selectPanel(p.id)}
+                  className={`panel-row ${selectedIds.includes(p.id) ? 'selected' : ''}`}
+                  onClick={(event) => selectPanel(p.id, event.shiftKey || event.ctrlKey || event.metaKey)}
+                  aria-pressed={selectedIds.includes(p.id)}
                 >
                   <span className="num">{i + 1}</span>
                   <span className="size">{sizeLabel} {unit}</span>
