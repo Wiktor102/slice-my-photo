@@ -3,6 +3,7 @@ import { PRESETS } from '../lib/presets'
 import { getPreset } from '../lib/frameSizes'
 import { panelGeometry, panelsOverlap, resolveFrame } from '../lib/geometry'
 import { PresetIcon } from './PresetIcon'
+import { Trash2Icon } from 'lucide-react'
 
 export function LeftSidebar() {
   const unit = useStore((s) => s.unit)
@@ -86,8 +87,11 @@ export function LeftSidebar() {
                   <button
                     className="del"
                     title="Delete panel"
+                    aria-label={`Delete panel ${i + 1}`}
                     onClick={(e) => { e.stopPropagation(); deletePanel(p.id) }}
-                  >🗑</button>
+                  >
+                    <Trash2Icon size={16} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
                 </div>
               )
             })}
