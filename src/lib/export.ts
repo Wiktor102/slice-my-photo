@@ -145,32 +145,35 @@ export async function runExport(options: ExportOptions, onProgress: (done: numbe
   const total = plan.panels.length + (plan.visualization ? 1 : 0)
   let done = 0
 
-  await new Promise<void>((resolve, reject) => {
-    worker.onmessage = (e: MessageEvent) => {
-      const msg = e.data
-      if (msg.kind === 'panel') {
-        zip.file(msg.name, msg.blob)
-        done += 1
-        onProgress(done, total)
-      } else if (msg.kind === 'visualization') {
-        zip.file('visualization.jpg', msg.blob)
-        done += 1
-        onProgress(done, total)
-      } else if (msg.kind === 'done') {
-        resolve()
-      } else if (msg.kind === 'error') {
-        reject(new Error(msg.message))
+  try {
+    await new Promise<void>((resolve, reject) => {
+      worker.onmessage = (e: MessageEvent) => {
+        const msg = e.data
+        if (msg.kind === 'panel') {
+          zip.file(msg.name, msg.blob)
+          done += 1
+          onProgress(done, total)
+        } else if (msg.kind === 'visualization') {
+          zip.file('visualization.jpg', msg.blob)
+          done += 1
+          onProgress(done, total)
+        } else if (msg.kind === 'done') {
+          resolve()
+        } else if (msg.kind === 'error') {
+          reject(new Error(msg.message))
+        }
       }
-    }
-    worker.onerror = (err) => reject(err)
-    const request: ExportWorkerRequest = {
-      imageUrl: sourceImage.fullUrl,
-      panels: plan.panels,
-      visualization: plan.visualization,
-    }
-    worker.postMessage(request)
-  })
-  worker.terminate()
+      worker.onerror = (err) => reject(err)
+      const request: ExportWorkerRequest = {
+        imageUrl: sourceImage.fullUrl,
+        panels: plan.panels,
+        visualization: plan.visualization,
+      }
+      worker.postMessage(request)
+    })
+  } finally {
+    worker.terminate()
+  }
 
   if (options.includeMeasurements) {
     const pdf = buildMeasurementsPdf()
