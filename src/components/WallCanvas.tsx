@@ -25,9 +25,7 @@ function niceStep(raw: number): number {
 }
 
 function formatNum(v: number): string {
-  const r = Math.round(v * 100) / 100
-  if (Number.isInteger(r)) return String(r)
-  return String(r)
+  return String(Math.round(v * 100) / 100)
 }
 
 function ticksInRange(min: number, max: number, step: number): number[] {

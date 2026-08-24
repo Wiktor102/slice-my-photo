@@ -130,13 +130,8 @@ export function PanelNode({
     const newInnerH = newOuterH - 2 * e
     node.scaleX(1)
     node.scaleY(1)
-    const newInnerX = newOuterX + e
-    const newInnerY = newOuterY + e
     setPanelSize(panel.id, newInnerW, newInnerH, 'custom')
     setPanelOuterPosition(panel.id, newOuterX, newOuterY)
-    // correct inner position if clamping moved outer
-    void newInnerX
-    void newInnerY
     setTip(null)
     endHistoryGroup()
   }

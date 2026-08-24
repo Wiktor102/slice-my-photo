@@ -4,37 +4,6 @@ import { PipetteIcon } from 'lucide-react'
 import { WALL_COLORS } from '../lib/frameColors'
 import { useStore } from '../store/useStore'
 
-interface NumberFieldProps {
-  label: string
-  value: number
-  onChange: (v: number) => void
-  min?: number
-  max?: number
-  step?: number
-  disabled?: boolean
-  suffix?: string
-}
-
-export function NumberField({ label, value, onChange, min, max, step = 1, disabled, suffix }: NumberFieldProps) {
-  return (
-    <label className="field">
-      <span>{label}{suffix ? ` (${suffix})` : ''}</span>
-      <input
-        type="number"
-        value={Number.isFinite(value) ? Math.round(value * 100) / 100 : ''}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-        onChange={(e) => {
-          const v = Number(e.target.value)
-          if (Number.isFinite(v)) onChange(v)
-        }}
-      />
-    </label>
-  )
-}
-
 export function Swatches({
   options,
   value,
