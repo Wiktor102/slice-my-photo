@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { computePreflight } from '../lib/preflight'
 import { useImagePlacement, useStore } from '../store/useStore'
+import { useDebouncedValue } from '../lib/useDebouncedValue'
 import type { PreflightStatus } from '../lib/preflight'
+
+const SETTLE_MS = 250
 
 const STATUS_LABEL: Record<PreflightStatus, string> = {
   good: 'Ready',
@@ -32,18 +35,25 @@ export function PreflightSummary() {
   const unit = useStore((s) => s.unit)
   const { scale, panX, panY } = useImagePlacement()
 
+  const inputs = useMemo(() => ({
+    panels,
+    frame,
+    perPanelFrame,
+    wall,
+    unit,
+    sourceImage,
+    placement: { scale, panX, panY },
+  }), [panels, frame, perPanelFrame, wall, unit, sourceImage, scale, panX, panY])
+
+  // Recompute only once layout changes settle, so dragging panels or the
+  // image doesn't re-run the analysis (and flicker) on every frame.
+  const settled = useDebouncedValue(inputs, SETTLE_MS)
+  const settling = settled !== inputs
+
   const report = useMemo(() => {
-    if (!sourceImage || panels.length === 0) return null
-    return computePreflight({
-      panels,
-      frame,
-      perPanelFrame,
-      wall,
-      unit,
-      sourceImage,
-      placement: { scale, panX, panY },
-    })
-  }, [sourceImage, panels, frame, perPanelFrame, wall, unit, scale, panX, panY])
+    if (!settled.sourceImage || settled.panels.length === 0) return null
+    return computePreflight({ ...settled, sourceImage: settled.sourceImage })
+  }, [settled])
 
   if (!sourceImage) {
     return (
@@ -75,7 +85,10 @@ export function PreflightSummary() {
       : 'Fix issues before export'
 
   return (
-    <section className={`card preflight-card preflight-${overallStatus}`} aria-labelledby="preflight-title">
+    <section
+      className={`card preflight-card preflight-${overallStatus}${settling ? ' preflight-settling' : ''}`}
+      aria-labelledby="preflight-title"
+    >
       <div className="preflight-heading" role="status" aria-live="polite">
         <span className={`preflight-badge preflight-badge-${overallStatus}`} aria-hidden="true">{statusIcon(overallStatus)}</span>
         <div className="preflight-heading-copy">
@@ -83,9 +96,13 @@ export function PreflightSummary() {
           <strong>{overallLabel}</strong>
         </div>
         <span className="preflight-counts">
-          <span className="preflight-count-good">{report.panels.filter((panel) => panel.status === 'good').length} OK</span>
-          {report.warningCount > 0 && <span className="preflight-count-warning">{report.warningCount} review</span>}
-          {report.errorCount > 0 && <span className="preflight-count-error">{report.errorCount} issue{report.errorCount === 1 ? '' : 's'}</span>}
+          {settling
+            ? <span className="preflight-count-pending">updating…</span>
+            : <>
+                <span className="preflight-count-good">{report.panels.filter((panel) => panel.status === 'good').length} OK</span>
+                {report.warningCount > 0 && <span className="preflight-count-warning">{report.warningCount} review</span>}
+                {report.errorCount > 0 && <span className="preflight-count-error">{report.errorCount} issue{report.errorCount === 1 ? '' : 's'}</span>}
+              </>}
         </span>
       </div>
 
