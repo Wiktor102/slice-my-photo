@@ -864,6 +864,20 @@ button.big { padding: 10px 16px; font-size: 15px; }
   font-size: 11px;
   color: var(--text-dim);
 }
+.layout-rename {
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.layout-rename:hover {
+  color: var(--accent);
+}
+.layout-rename-error {
+  color: var(--danger);
+  font-size: 11px;
+}
 .layout-del {
   background: transparent;
   border: none;

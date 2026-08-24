@@ -3,6 +3,8 @@ import type { SavedLayout } from '../types'
 const STORAGE_KEY = 'wallart-saved-layouts'
 export const MAX_LAYOUTS = 20
 
+export type LayoutOperationResult = { ok: true } | { ok: false; error: string }
+
 function readAll(): SavedLayout[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -23,7 +25,7 @@ export function getAllLayouts(): SavedLayout[] {
   return readAll().sort((a, b) => b.savedAt - a.savedAt)
 }
 
-export function saveLayout(layout: SavedLayout): { ok: true } | { ok: false; error: string } {
+export function saveLayout(layout: SavedLayout): LayoutOperationResult {
   try {
     const all = readAll()
     const existingIdx = all.findIndex((l) => l.name === layout.name && l.id !== layout.id)
@@ -47,12 +49,27 @@ export function deleteLayout(id: string): void {
   writeAll(all)
 }
 
-export function renameLayout(id: string, name: string): void {
-  const all = readAll()
-  const layout = all.find((l) => l.id === id)
-  if (layout) {
-    layout.name = name
+export function renameLayout(id: string, name: string): LayoutOperationResult {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return { ok: false, error: 'Name is required.' }
+  }
+
+  try {
+    const all = readAll()
+    const layout = all.find((l) => l.id === id)
+    if (!layout) {
+      return { ok: false, error: 'Layout not found.' }
+    }
+    if (all.some((l) => l.id !== id && l.name === trimmed)) {
+      return { ok: false, error: 'A layout with this name already exists.' }
+    }
+
+    layout.name = trimmed
     writeAll(all)
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not rename. Browser storage may be full.' }
   }
 }
 
