@@ -159,7 +159,14 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   // space-to-pan viewport
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = true; setSpaceHeld(true) } }
+    const isEditableTarget = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t) return false
+      if (t.isContentEditable) return true
+      const tag = t.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    }
+    const down = (e: KeyboardEvent) => { if (e.code === 'Space' && !isEditableTarget(e)) { spaceRef.current = true; setSpaceHeld(true) } }
     const up = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = false; setSpaceHeld(false) } }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
