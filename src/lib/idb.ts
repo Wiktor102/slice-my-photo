@@ -14,7 +14,8 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
-export async function idbSetImage(value: unknown): Promise<void> {
+/** Returns false when the write fails (e.g. storage quota exceeded). */
+export async function idbSetImage(value: unknown): Promise<boolean> {
   try {
     const db = await openDb()
     await new Promise<void>((resolve, reject) => {
@@ -24,8 +25,9 @@ export async function idbSetImage(value: unknown): Promise<void> {
       tx.onerror = () => reject(tx.error)
     })
     db.close()
+    return true
   } catch {
-    /* ignore persistence errors */
+    return false
   }
 }
 
