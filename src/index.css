@@ -347,6 +347,22 @@ button.big { padding: 10px 16px; font-size: 15px; }
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+.topbar-warning {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  flex: 0 1 340px;
+  min-width: 0;
+  max-width: min(340px, 30vw);
+  color: #f0c878;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.topbar-warning-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .sidebar {
   background: var(--panel);
   overflow-y: auto;
@@ -923,4 +939,106 @@ button.big { padding: 10px 16px; font-size: 15px; }
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ---------- Compact editor layout ---------- */
+@media (max-width: 1100px) {
+  .editor {
+    grid-template-columns: 210px minmax(0, 1fr) 240px;
+    grid-template-rows: auto minmax(0, 1fr) 36px;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    min-height: 48px;
+    height: auto;
+    padding: 6px 10px;
+    gap: 6px 8px;
+  }
+  .topbar .spacer { display: none; }
+  .topbar button { padding: 5px 8px; }
+  .topbar-warning { max-width: 280px; }
+}
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .editor {
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, 58vh) auto auto auto;
+    grid-template-areas:
+      "top"
+      "main"
+      "left"
+      "right"
+      "bottom";
+  }
+  .topbar-warning {
+    order: 20;
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .sidebar {
+    min-width: 0;
+    overflow: visible;
+  }
+  .sidebar.left {
+    border-right: 0;
+    border-top: 1px solid var(--border);
+  }
+  .sidebar.right {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .editor > .main-area {
+    min-height: 320px;
+  }
+  .bottombar {
+    height: auto;
+    min-height: 36px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: 8px 10px;
+  }
+  .bottombar .spacer { display: none; }
+  .zoom-control {
+    flex: 1 1 180px;
+    min-width: 140px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: 8px;
+    gap: 6px;
+  }
+  .topbar .brand-mark {
+    width: 38px;
+    height: 25px;
+  }
+  .topbar .title {
+    flex: 1 1 calc(100% - 52px);
+    min-width: 0;
+  }
+  .topbar button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .editor {
+    grid-template-rows: auto minmax(280px, 52vh) auto auto auto;
+  }
+  .editor > .main-area {
+    min-height: 280px;
+  }
+  .sidebar { padding: 10px; }
+  .bottombar {
+    gap: 6px;
+    font-size: 11px;
+  }
+  .bottombar button {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
+  .bottombar .zoom-control { flex-basis: 100%; }
 }
