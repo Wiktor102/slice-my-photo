@@ -373,7 +373,14 @@ export const useStore = create<State>()(
           set({ gap })
           return
         }
-        set({ gap, panels, image: { ...DEFAULT_IMAGE } })
+        set({
+          gap,
+          panels,
+          selectedId: null,
+          perPanelFrame: {},
+          frame: { ...get().frame, perPanel: false },
+          image: { ...DEFAULT_IMAGE },
+        })
       },
 
       setCurrentSizeKey: (key) => {
@@ -383,7 +390,14 @@ export const useStore = create<State>()(
           set({ currentSizeKey: key })
           return
         }
-        set({ currentSizeKey: key, panels, image: { ...DEFAULT_IMAGE } })
+        set({
+          currentSizeKey: key,
+          panels,
+          selectedId: null,
+          perPanelFrame: {},
+          frame: { ...get().frame, perPanel: false },
+          image: { ...DEFAULT_IMAGE },
+        })
       },
 
       addPanel: () => {
@@ -607,8 +621,13 @@ export const useStore = create<State>()(
           unit: layout.unit,
           wall: { ...layout.wall },
           panels: layout.panels.map((p) => ({ ...p, passepartout: normalizePassepartout(p, layout.frame) })),
-          frame: { ...layout.frame, perPanel: false },
-          perPanelFrame: { ...layout.perPanelFrame },
+          frame: { ...layout.frame },
+          perPanelFrame: Object.fromEntries(
+            Object.entries(layout.perPanelFrame).map(([id, panelFrame]) => [id, {
+              ...panelFrame,
+              passepartout: { ...panelFrame.passepartout },
+            }]),
+          ),
           gap: layout.gap,
           currentSizeKey: layout.currentSizeKey,
           presetActive: layout.presetActive,
