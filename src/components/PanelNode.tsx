@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Group, Rect, Transformer, Image as KonvaImage } from 'react-konva'
+import { Group, Rect, Transformer, Text, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { Panel, PerPanelFrame, SourceImage } from '../types'
 import { panelGeometry, computeSnaps } from '../lib/geometry'
@@ -19,12 +19,14 @@ interface Props {
   others: { panel: Panel; frame: PerPanelFrame }[]
   viewportScale: number
   showLabel: boolean
+  panelNumber: number
+  interactive: boolean
   setSnapLines: (s: SnapLines | null) => void
   setTip: (t: string | null) => void
 }
 
 export function PanelNode({
-  panel, frame, selected, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, setSnapLines, setTip,
+  panel, frame, selected, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, panelNumber, interactive, setSnapLines, setTip,
 }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
@@ -42,6 +44,10 @@ export function PanelNode({
   const mat = frame.passepartout
   const frameColor = frameHex(frame.colorKey, frame.customColor)
   const matColor = matHex(mat.colorKey, mat.customColor)
+
+  const handleSelect = () => {
+    if (interactive) selectPanel(panel.id)
+  }
 
   useEffect(() => {
     const tr = trRef.current
@@ -152,14 +158,14 @@ export function PanelNode({
         ref={groupRef}
         x={outer.x}
         y={outer.y}
-        draggable
-        onMouseDown={() => selectPanel(panel.id)}
-        onDragStart={handleDragStart}
-        onDragMove={handleDragMove}
-        onDragEnd={handleDragEnd}
-        onTransformStart={handleTransformStart}
-        onTransform={handleTransform}
-        onTransformEnd={handleTransformEnd}
+        draggable={interactive}
+        onMouseDown={interactive ? handleSelect : undefined}
+        onDragStart={interactive ? handleDragStart : undefined}
+        onDragMove={interactive ? handleDragMove : undefined}
+        onDragEnd={interactive ? handleDragEnd : undefined}
+        onTransformStart={interactive ? handleTransformStart : undefined}
+        onTransform={interactive ? handleTransform : undefined}
+        onTransformEnd={interactive ? handleTransformEnd : undefined}
       >
         <Rect
           x={0}
@@ -189,15 +195,28 @@ export function PanelNode({
           />
         )}
         {showLabel && (
-          <Rect
-            x={outer.w / 2 - 12}
-            y={outer.h / 2 - 12}
-            width={24}
-            height={24}
-            fill="rgba(0,0,0,0.45)"
-            cornerRadius={12}
-            listening={false}
-          />
+          <Group listening={false}>
+            <Rect
+              x={outer.w / 2 - 12}
+              y={outer.h / 2 - 12}
+              width={24}
+              height={24}
+              fill="rgba(0,0,0,0.45)"
+              cornerRadius={12}
+            />
+            <Text
+              x={outer.w / 2 - 12}
+              y={outer.h / 2 - 12}
+              width={24}
+              height={24}
+              text={String(panelNumber)}
+              align="center"
+              verticalAlign="middle"
+              fontSize={12}
+              fontStyle="bold"
+              fill="#ffffff"
+            />
+          </Group>
         )}
       </Group>
       {selected && (

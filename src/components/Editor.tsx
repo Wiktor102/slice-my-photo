@@ -25,6 +25,8 @@ export function Editor() {
   const requestZoomToFit = useStore((s) => s.requestZoomToFit)
   const requestZoomToImage = useStore((s) => s.requestZoomToImage)
 
+  if (preview) return <PreviewMode />
+
   return (
     <>
       <div className="editor">
@@ -35,7 +37,6 @@ export function Editor() {
         <BottomBar onZoomToFit={requestZoomToFit} onZoomToImage={requestZoomToImage} />
       </div>
 
-      {preview && <PreviewMode />}
       {exportOpen && <ExportModal />}
       {saveLayoutOpen && <SaveLayoutModal />}
       {loadLayoutOpen && <LoadLayoutModal />}
