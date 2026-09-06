@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { useStore } from '../store/useStore'
 import { TopBar } from './TopBar'
 import { LeftSidebar } from './LeftSidebar'
@@ -5,11 +6,20 @@ import { RightSidebar } from './RightSidebar'
 import { BottomBar } from './BottomBar'
 import { WallCanvas } from './WallCanvas'
 import { PreviewMode } from './PreviewMode'
-import { ExportModal } from './ExportModal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { SaveLayoutModal } from './SaveLayoutModal'
 import { LoadLayoutModal } from './LoadLayoutModal'
 import { Toast } from './Toast'
+
+const LazyExportModal = lazy(() => import('./ExportModal').then(({ ExportModal: Modal }) => ({ default: Modal })))
+
+function ExportModal() {
+  return (
+    <Suspense fallback={<div className="modal-overlay"><div className="modal" role="status">Preparing export…</div></div>}>
+      <LazyExportModal />
+    </Suspense>
+  )
+}
 
 export function Editor() {
   const preview = useStore((s) => s.preview)
