@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Group, Rect, Transformer, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { Panel, PerPanelFrame, SourceImage } from '../types'
-import { panelGeometry, computeSnaps } from '../lib/geometry'
+import { clampOuterPosition, panelGeometry, computeSnaps } from '../lib/geometry'
 import { frameHex, matHex } from '../lib/frameColors'
 import { useStore } from '../store/useStore'
 import type { SnapLines } from '../types'
@@ -75,8 +75,8 @@ export function PanelNode({
     ox += res.offsetX
     oy += res.offsetY
     const wall = st.wall
-    ox = Math.max(0, Math.min(ox, wall.width - outer.w))
-    oy = Math.max(0, Math.min(oy, wall.height - outer.h))
+    ox = clampOuterPosition(ox, outer.w, wall.width)
+    oy = clampOuterPosition(oy, outer.h, wall.height)
     node.x(ox)
     node.y(oy)
     setSnapLines({ vertical: res.vertical, horizontal: res.horizontal })

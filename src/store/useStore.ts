@@ -14,7 +14,7 @@ import type {
 } from '../types'
 import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
 import { findPreset } from '../lib/frameSizes'
-import { boundingBox, clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
+import { boundingBox, clampOuterPosition, clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
@@ -256,6 +256,13 @@ export const useStore = create<State>()(
           .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
       }
 
+      const clampPanelsToWall = (
+        panels: Panel[],
+        frame: FrameStyle,
+        perPanelFrame: Record<string, PerPanelFrame>,
+        wall: WallSetup,
+      ) => panels.map((panel) => clampPanelToWall(panel, resolveFrame(panel, frame, perPanelFrame), wall.width, wall.height))
+
       return {
       screen: 'upload',
       unit: 'cm',
@@ -348,7 +355,7 @@ export const useStore = create<State>()(
         if (wall.height < 10) wall.height = 10
         // clamp all panels into the new wall
         const { panels, frame, perPanelFrame } = get()
-        const clamped = panels.map((p) => clampPanelToWall(p, resolveFrame(p, frame, perPanelFrame), wall.width, wall.height))
+        const clamped = clampPanelsToWall(panels, frame, perPanelFrame, wall)
         set({ wall, panels: clamped })
       },
 
@@ -428,16 +435,17 @@ export const useStore = create<State>()(
       },
 
       updatePanel: (id, partial) => {
-        const { unit } = get()
+        const { unit, panels, frame, perPanelFrame, wall } = get()
+        const nextPanels = panels.map((p) => {
+          if (p.id !== id) return p
+          const merged = { ...p, ...partial }
+          if (partial.width !== undefined || partial.height !== undefined) {
+            merged.sizePreset = findPreset(unit, merged.width, merged.height)
+          }
+          return merged
+        })
         set({
-          panels: get().panels.map((p) => {
-            if (p.id !== id) return p
-            const merged = { ...p, ...partial }
-            if (partial.width !== undefined || partial.height !== undefined) {
-              merged.sizePreset = findPreset(unit, merged.width, merged.height)
-            }
-            return merged
-          }),
+          panels: clampPanelsToWall(nextPanels, frame, perPanelFrame, wall),
           presetActive: null,
         })
       },
@@ -446,28 +454,29 @@ export const useStore = create<State>()(
         const min = 10
         const width = Math.max(min, w)
         const height = Math.max(min, h)
-        const unit = get().unit
+        const { unit, panels, frame, perPanelFrame, wall } = get()
+        const nextPanels = panels.map((p) => {
+          if (p.id !== id) return p
+          const next = { ...p, width, height, sizePreset: presetKey }
+          const current = normalizePassepartout(p)
+          if (current.enabled) {
+            if (current.mode === 'opening') {
+              current.openingWidth = Math.max(1, Math.min(current.openingWidth, width))
+              current.openingHeight = Math.max(1, Math.min(current.openingHeight, height))
+            }
+            if (current.mode === 'inset') {
+              current.inset = Math.max(0, Math.min(current.inset, Math.min(width, height) / 2))
+            }
+          }
+          return {
+            ...next,
+            passepartout: current.enabled
+              ? current
+              : defaultPassepartout({ width, height, sizePreset: presetKey === 'custom' ? findPreset(unit, width, height) : presetKey }),
+          }
+        })
         set({
-          panels: get().panels.map((p) => {
-            if (p.id !== id) return p
-            const next = { ...p, width, height, sizePreset: presetKey }
-            const current = normalizePassepartout(p)
-            if (current.enabled) {
-              if (current.mode === 'opening') {
-                current.openingWidth = Math.max(1, Math.min(current.openingWidth, width))
-                current.openingHeight = Math.max(1, Math.min(current.openingHeight, height))
-              }
-              if (current.mode === 'inset') {
-                current.inset = Math.max(0, Math.min(current.inset, Math.min(width, height) / 2))
-              }
-            }
-            return {
-              ...next,
-              passepartout: current.enabled
-                ? current
-                : defaultPassepartout({ width, height, sizePreset: presetKey === 'custom' ? findPreset(unit, width, height) : presetKey }),
-            }
-          }),
+          panels: clampPanelsToWall(nextPanels, frame, perPanelFrame, wall),
           presetActive: null,
         })
       },
@@ -479,38 +488,37 @@ export const useStore = create<State>()(
         const f = resolveFrame(panel, frame, perPanelFrame)
         const e = f.edgeWidth
         const g = panelGeometry(panel, f)
-        let ox = outerX
-        let oy = outerY
-        if (ox < 0) ox = 0
-        if (oy < 0) oy = 0
-        if (ox + g.outer.w > wall.width) ox = wall.width - g.outer.w
-        if (oy + g.outer.h > wall.height) oy = wall.height - g.outer.h
+        const ox = clampOuterPosition(outerX, g.outer.w, wall.width)
+        const oy = clampOuterPosition(outerY, g.outer.h, wall.height)
         set({
           panels: get().panels.map((p) => (p.id === id ? { ...p, x: ox + e, y: oy + e } : p)),
         })
       },
 
       orientPanel: (id) => {
+        const { unit, panels, frame, perPanelFrame, wall } = get()
+        const nextPanels = panels.map((p) =>
+          p.id === id
+            ? {
+              ...p,
+              width: p.height,
+              height: p.width,
+              sizePreset: findPreset(unit, p.height, p.width),
+              passepartout: rotatePassepartout(p.passepartout),
+            }
+            : p,
+        )
         set({
-          panels: get().panels.map((p) =>
-            p.id === id
-              ? {
-                ...p,
-                width: p.height,
-                height: p.width,
-                sizePreset: findPreset(get().unit, p.height, p.width),
-                passepartout: rotatePassepartout(p.passepartout),
-              }
-              : p,
-          ),
+          panels: clampPanelsToWall(nextPanels, frame, perPanelFrame, wall),
           presetActive: null,
         })
       },
 
       setFrame: (partial) => {
-        const { frame, perPanelFrame, selectedId } = get()
+        const { frame, perPanelFrame, selectedId, panels, wall } = get()
         if ('perPanel' in partial) {
-          set({ frame: { ...frame, ...partial } })
+          const nextFrame = { ...frame, ...partial }
+          set({ frame: nextFrame, panels: clampPanelsToWall(panels, nextFrame, perPanelFrame, wall) })
           return
         }
         if (frame.perPanel && selectedId) {
@@ -521,17 +529,22 @@ export const useStore = create<State>()(
             shadow: frame.shadow,
             passepartout: normalizePassepartout(get().panels.find((p) => p.id === selectedId)!, frame),
           }
-          set({ perPanelFrame: { ...perPanelFrame, [selectedId]: { ...existing, ...partial } } })
+          const nextPerPanelFrame = { ...perPanelFrame, [selectedId]: { ...existing, ...partial } }
+          set({
+            perPanelFrame: nextPerPanelFrame,
+            panels: clampPanelsToWall(panels, frame, nextPerPanelFrame, wall),
+          })
         } else {
-          set({ frame: { ...frame, ...partial } })
+          const nextFrame = { ...frame, ...partial }
+          set({ frame: nextFrame, panels: clampPanelsToWall(panels, nextFrame, perPanelFrame, wall) })
         }
       },
 
       resetFrameToGlobal: (id) => {
-        const { perPanelFrame } = get()
+        const { perPanelFrame, frame, panels, wall } = get()
         const next = { ...perPanelFrame }
         delete next[id]
-        set({ perPanelFrame: next })
+        set({ perPanelFrame: next, panels: clampPanelsToWall(panels, frame, next, wall) })
       },
 
       updatePassepartout: (id, partial) => {
