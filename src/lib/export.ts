@@ -293,6 +293,10 @@ export function buildMeasurementsPdf(): jsPDF {
   pdf.setTextColor(60)
   const matCount = panels.filter((panel) => resolveFrame(panel, frame, perPanelFrame).passepartout.enabled).length
   const matNote = matCount > 0 ? `Passepartout: ${matCount} panel${matCount === 1 ? '' : 's'}` : 'No passepartout'
-  pdf.text(`Frame edge: ${frame.edgeWidth} ${u}   |   ${matNote}   |   Panels: ${panels.length}`, margin, legendY)
+  const edgeNote = sorted.length > 0
+    ? sorted.map((panel, i) => `#${i + 1} ${resolveFrame(panel, frame, perPanelFrame).edgeWidth} ${u}`).join(', ')
+    : 'none'
+  const legend = `Frame edges: ${edgeNote}   |   ${matNote}   |   Panels: ${panels.length}`
+  pdf.text(pdf.splitTextToSize(legend, drawW), margin, legendY)
   return pdf
 }
