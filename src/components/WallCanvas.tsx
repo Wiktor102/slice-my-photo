@@ -166,12 +166,13 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   // space-to-pan viewport
   useEffect(() => {
+    if (isPreview) return
     const down = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = true; setSpaceHeld(true) } }
     const up = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = false; setSpaceHeld(false) } }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
-  }, [])
+  }, [isPreview])
 
   // wheel zoom (non-passive)
   useEffect(() => {
@@ -237,7 +238,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     setViewport({ x: vx - dx / scale, y: vy - dy / scale })
   }
   const handleBgClick = () => {
-    if (!spaceRef.current) {
+    if (!isPreview && !spaceRef.current) {
       selectPanel(null)
       selectImage(false)
     }
@@ -439,6 +440,8 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   others={panels.filter((q) => q.id !== p.id).map((q) => ({ panel: q, frame: resolveFrame(q, frame, perPanelFrame) }))}
                   viewportScale={scale}
                   showLabel={isPreview}
+                  panelNumber={panels.indexOf(p) + 1}
+                  interactive={!isPreview}
                   setSnapLines={setSnapLines}
                   setTip={setTip}
                 />
