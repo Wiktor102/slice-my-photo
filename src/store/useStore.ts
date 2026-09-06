@@ -310,10 +310,12 @@ export const useStore = create<State>()(
             : null
           let recoveryWarning: string | null = null
           if (!isPersistable(img.fullUrl)) {
-            await idbClearImage()
-            recoveryWarning = 'This image is too large to restore after a page reload. You can keep working, but refreshing will lose it.'
+            const cleared = await idbClearImage()
+            recoveryWarning = cleared
+              ? 'This image is too large to restore after a page reload. You can keep working, but refreshing will lose it.'
+              : 'This image is too large to restore after a page reload. The current image stays active, but the browser could not clear previous recovery data. Refresh may restore an older image if one was already saved.'
           } else if (!(await idbSetImage(img))) {
-            recoveryWarning = 'The browser could not store this image for recovery. You can keep working, but refreshing the page will lose it.'
+            recoveryWarning = 'The browser could not save this image for recovery. The current image stays active, but refresh may restore an older image if one was already saved.'
           }
           rawSet({
             sourceImage: img,
