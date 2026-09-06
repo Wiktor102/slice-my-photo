@@ -18,6 +18,7 @@ export function TopBar() {
   const setLoadLayoutOpen = useStore((s) => s.setLoadLayoutOpen)
   const loadImageFromFile = useStore((s) => s.loadImageFromFile)
   const preview = useStore((s) => s.preview)
+  const imageWarning = useStore((s) => s.imageWarning)
   const panels = useStore((s) => s.panels)
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
@@ -49,6 +50,15 @@ export function TopBar() {
     <div className="topbar">
       <img className="brand-mark" src="/brand-mark.svg" alt="" aria-hidden />
       <span className="title">Slice My Photo</span>
+      {imageWarning && (
+        <span className="topbar-warning" role="status" aria-live="polite">
+          <span aria-hidden="true">⚠</span>
+          <span className="topbar-warning-copy">
+            <span>{imageWarning}</span>
+            {imageWarning.startsWith('Could not load') && <span>Your current image remains active.</span>}
+          </span>
+        </span>
+      )}
       <button className="ghost" onClick={() => setHomeOpen(true)}><HomeIcon size={14} />Home</button>
       <button className="ghost" onClick={() => inputRef.current?.click()}><ImageIcon size={14} />Change Image</button>
       <input ref={inputRef} type="file" accept={ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) loadImageFromFile(f); e.target.value = '' }} />

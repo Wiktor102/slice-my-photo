@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { useStore } from '../store/useStore'
 import { TopBar } from './TopBar'
 import { LeftSidebar } from './LeftSidebar'
@@ -5,11 +6,20 @@ import { RightSidebar } from './RightSidebar'
 import { BottomBar } from './BottomBar'
 import { WallCanvas } from './WallCanvas'
 import { PreviewMode } from './PreviewMode'
-import { ExportModal } from './ExportModal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { SaveLayoutModal } from './SaveLayoutModal'
 import { LoadLayoutModal } from './LoadLayoutModal'
 import { Toast } from './Toast'
+
+const LazyExportModal = lazy(() => import('./ExportModal').then(({ ExportModal: Modal }) => ({ default: Modal })))
+
+function ExportModal() {
+  return (
+    <Suspense fallback={<div className="modal-overlay"><div className="modal" role="status">Preparing export…</div></div>}>
+      <LazyExportModal />
+    </Suspense>
+  )
+}
 
 export function Editor() {
   const preview = useStore((s) => s.preview)
@@ -25,6 +35,8 @@ export function Editor() {
   const requestZoomToFit = useStore((s) => s.requestZoomToFit)
   const requestZoomToImage = useStore((s) => s.requestZoomToImage)
 
+  if (preview) return <PreviewMode />
+
   return (
     <>
       <div className="editor">
@@ -35,7 +47,6 @@ export function Editor() {
         <BottomBar onZoomToFit={requestZoomToFit} onZoomToImage={requestZoomToImage} />
       </div>
 
-      {preview && <PreviewMode />}
       {exportOpen && <ExportModal />}
       {saveLayoutOpen && <SaveLayoutModal />}
       {loadLayoutOpen && <LoadLayoutModal />}
