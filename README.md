@@ -8,7 +8,7 @@ Wczytaj zdjęcie, ustaw wymiary ściany i dodaj do ośmiu paneli. Wybierz jeden 
 
 Gdy wszystko jest już na swoim miejscu, ustaw obraz w każdym panelu w jednym z trzech trybów: dopasuj całe zdjęcie, wypełnij ramkę z przycięciem lub przeciągnij i skaluj ręcznie. Eksport pakuje każdy panel jako wysokiej rozdzielczości JPEG lub PNG, generuje wizualizację całej ściany i tworzy plik PDF ze wszystkimi wymiarami – gotowy do wydruku lub oprawienia.
 
-Projekt został zbudowany z użyciem React 19, TypeScript i Vite. Renderowanie na canvasie obsługuje Konva.js, stan aplikacji zarządzany jest przez Zustand, a zadania eksportu działają poza głównym wątkiem dzięki Web Workerom. Dane sesji są przechowywane w localStorage i IndexedDB, więc możesz odświeżyć stronę i kontynuować dokładnie w miejscu, w którym skończyłeś.
+Projekt został zbudowany z użyciem React 19, TypeScript i Vite. Renderowanie na canvasie obsługuje Konva.js, a stan aplikacji zarządza Zustand. Web Worker generuje kadry paneli i wizualizację ściany, natomiast tworzenie archiwum ZIP i PDF z pomiarami odbywa się w głównym wątku przeglądarki. Układ i ustawienia projektu są zapisywane w localStorage. Oryginalny obraz jest osobno zapisywany w IndexedDB na potrzeby przywrócenia po odświeżeniu, jeśli przeglądarka na to pozwala; ograniczenia miejsca lub prywatności mogą wymagać ponownego wczytania obrazu.
 
 ---
 
@@ -22,7 +22,7 @@ Upload an image, configure your wall dimensions, and add up to eight panels. Cho
 
 Once everything is in place, position the image within each panel in one of three modes: fit the whole image, fill the frame with cropping, or drag and scale manually. The export tool packages every panel as a high-resolution JPEG or PNG, generates a visualization of the full wall, and produces a PDF with all measurements clearly labeled — ready for printing or framing.
 
-The project is built with React 19, TypeScript, and Vite. Canvas rendering is handled by Konva.js, state is managed with Zustand, and export tasks run off the main thread using Web Workers. Session data persists in localStorage and IndexedDB, so you can reload the page and pick up right where you left off.
+The project is built with React 19, TypeScript, and Vite. Konva.js handles canvas rendering and Zustand manages the application state. A Web Worker generates panel crops and the wall visualization, while ZIP assembly and measurements PDF generation run in the browser's main thread. Project layout and settings persist in localStorage. The original image is stored separately in IndexedDB for reload recovery when the browser permits it; storage limits or privacy restrictions may require the image to be uploaded again after a refresh.
 
 ## Development
 
