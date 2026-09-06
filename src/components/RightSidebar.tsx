@@ -2,7 +2,7 @@ import { useStore } from '../store/useStore'
 import { FRAME_SIZES, getPreset } from '../lib/frameSizes'
 import { FRAME_COLORS, MAT_COLORS } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
-import { suggestedOpening } from '../lib/passepartout'
+import { minimumDimension, minimumOpeningSize, suggestedOpening } from '../lib/passepartout'
 import { ArrowLeftRightIcon } from 'lucide-react'
 import { CommitNumberField, Segmented, Swatches, Toggle, WallColorPicker } from './ui'
 import { PreflightSummary } from './PreflightSummary'
@@ -35,6 +35,8 @@ export function RightSidebar() {
   const selGeom = selected && selFrame ? panelGeometry(selected, selFrame) : null
   const hasOverride = selected ? Boolean(perPanelFrame[selected.id]) : false
   const sizePresetOptions = FRAME_SIZES[unit]
+  const minDimension = minimumDimension(unit)
+  const minOpening = minimumOpeningSize(unit)
   // Frame section shows the selected panel's resolved frame when in per-panel mode.
   const displayFrame = frame.perPanel && selFrame ? selFrame : frame
   const passepartout = selFrame?.passepartout ?? null
@@ -52,8 +54,8 @@ export function RightSidebar() {
       <div className="card">
         <div className="section-title">Wall Setup</div>
         <div className="field-grid">
-          <CommitNumberField label="Width" value={wall.width} onCommit={(v) => setWall({ width: v })} min={10} step={1} suffix={unit} />
-          <CommitNumberField label="Height" value={wall.height} onCommit={(v) => setWall({ height: v })} min={10} step={1} suffix={unit} />
+          <CommitNumberField label="Width" value={wall.width} onCommit={(v) => setWall({ width: v })} min={minDimension} step={1} suffix={unit} />
+          <CommitNumberField label="Height" value={wall.height} onCommit={(v) => setWall({ height: v })} min={minDimension} step={1} suffix={unit} />
         </div>
         <div className="field">
           <span>Wall color</span>
@@ -88,7 +90,7 @@ export function RightSidebar() {
                   label="Width"
                   value={selected.width}
                   suffix={unit}
-                  min={10}
+                  min={minDimension}
                   onCommit={(v) => {
                     if (selected.lockAspect) {
                       const ratio = selected.height / selected.width
@@ -100,7 +102,7 @@ export function RightSidebar() {
                   label="Height"
                   value={selected.height}
                   suffix={unit}
-                  min={10}
+                  min={minDimension}
                   onCommit={(v) => {
                     if (selected.lockAspect) {
                       const ratio = selected.width / selected.height
@@ -148,7 +150,7 @@ export function RightSidebar() {
                           label="Opening width"
                           value={passepartout.openingWidth}
                           suffix={unit}
-                          min={1}
+                          min={minOpening}
                           max={selected.width}
                           step={0.5}
                           onCommit={(v) => updatePassepartout(selected.id, { openingWidth: v })}
@@ -157,7 +159,7 @@ export function RightSidebar() {
                           label="Opening height"
                           value={passepartout.openingHeight}
                           suffix={unit}
-                          min={1}
+                          min={minOpening}
                           max={selected.height}
                           step={0.5}
                           onCommit={(v) => updatePassepartout(selected.id, { openingHeight: v })}

@@ -15,7 +15,7 @@ import type {
 import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
 import { findPreset } from '../lib/frameSizes'
 import { boundingBox, clampPanelToWall, CM_PER_INCH, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
-import { defaultPassepartout, legacyPassepartout, minimumOpeningSize, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
+import { defaultPassepartout, legacyPassepartout, minimumDimension, minimumOpeningSize, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
 
@@ -419,8 +419,9 @@ export const useStore = create<State>()(
 
       setWall: (partial) => {
         const wall = { ...get().wall, ...partial }
-        if (wall.width < 10) wall.width = 10
-        if (wall.height < 10) wall.height = 10
+        const minDimension = minimumDimension(get().unit)
+        if (wall.width < minDimension) wall.width = minDimension
+        if (wall.height < minDimension) wall.height = minDimension
         // clamp all panels into the new wall
         const { panels, frame, perPanelFrame } = get()
         const clamped = panels.map((p) => clampPanelToWall(p, resolveFrame(p, frame, perPanelFrame, get().unit), wall.width, wall.height))
@@ -532,10 +533,10 @@ export const useStore = create<State>()(
       },
 
       setPanelSize: (id, w, h, presetKey) => {
-        const min = 10
+        const unit = get().unit
+        const min = minimumDimension(unit)
         const width = Math.max(min, w)
         const height = Math.max(min, h)
-        const unit = get().unit
         const minOpening = minimumOpeningSize(unit)
         set({
           panels: get().panels.map((p) => {

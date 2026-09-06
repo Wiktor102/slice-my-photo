@@ -3,7 +3,12 @@ import { FRAME_SIZES, getPreset } from './frameSizes'
 
 export const DEFAULT_PASSEPARTOUT_COLOR: MatColorKey = 'white'
 export const DEFAULT_PASSEPARTOUT_CUSTOM_COLOR = '#ffffff'
+export const MIN_DIMENSION = 10
 export const MIN_OPENING_SIZE = 1
+
+export function minimumDimension(unit: Unit): number {
+  return unit === 'in' ? MIN_DIMENSION / 2.54 : MIN_DIMENSION
+}
 
 export function minimumOpeningSize(unit: Unit): number {
   return unit === 'in' ? MIN_OPENING_SIZE / 2.54 : MIN_OPENING_SIZE

@@ -219,13 +219,18 @@ export function CommitNumberField({
 }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
-  const display = editing ? text : String(Math.round(value * 100) / 100)
+  const changed = useRef(false)
+  const formatValue = (v: number) => String(Math.round(v * 100) / 100)
+  const display = editing ? text : formatValue(value)
   const beginEdit = () => {
+    changed.current = false
     setEditing(true)
-    setText(String(Math.round(value * 100) / 100))
+    setText(formatValue(value))
   }
   const commit = () => {
     setEditing(false)
+    if (!changed.current) return
+    changed.current = false
     const v = Number(text)
     if (Number.isFinite(v)) {
       let out = v
@@ -244,7 +249,7 @@ export function CommitNumberField({
         value={display}
         disabled={disabled}
         onFocus={beginEdit}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => { changed.current = true; setText(e.target.value) }}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
       />
