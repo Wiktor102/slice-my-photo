@@ -302,13 +302,13 @@ function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number)
   return y
 }
 
-function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number): number {
+function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number, startIndex = 0, rowLimit = plan.gaps.length): number {
   const unit = plan.unit === 'cm' ? 'cm' : 'in'
   const margin = 14
   let y = startY
   pdf.setTextColor(40, 40, 50)
   pdf.setFontSize(10)
-  pdf.text('Aligned adjacent gaps', margin, y)
+  pdf.text(`Aligned adjacent gaps${startIndex > 0 ? ' (continued)' : ''}`, margin, y)
   y += 6
   pdf.setFontSize(7)
   if (plan.gaps.length === 0) {
@@ -332,7 +332,7 @@ function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number): number
     x += column.width
   }
   y += 7
-  plan.gaps.forEach((gap, index) => {
+  plan.gaps.slice(startIndex, startIndex + rowLimit).forEach((gap, index) => {
     x = margin
     const values = [gap.orientation === 'horizontal' ? 'Horizontal' : 'Vertical', `#${gap.from} ↔ #${gap.to}`, formatMeasure(gap.gap)]
     pdf.setFillColor(index % 2 === 0 ? 250 : 242, index % 2 === 0 ? 250 : 242, 252)
@@ -347,7 +347,52 @@ function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number): number
   return y + 5
 }
 
-function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan): void {
+const SCHEDULE_TABLE_TOP = 29
+const SCHEDULE_GAP_TOP_OFFSET = 12
+const SCHEDULE_NOTE_HEIGHT = 30
+const SCHEDULE_NOTE_BOTTOM = 15
+const A4_LANDSCAPE_HEIGHT = 210
+const GAP_DETAILS_ROW_LIMIT = Math.max(1, Math.floor(
+  (A4_LANDSCAPE_HEIGHT - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT - 4 - SCHEDULE_TABLE_TOP - 18) / 7,
+))
+
+function gapTableHeight(plan: MeasurementPlan): number {
+  if (plan.gaps.length === 0) return 14
+  return 6 + 7 + plan.gaps.length * 7 + 5
+}
+
+function needsGapDetailsPage(plan: MeasurementPlan): boolean {
+  const tableBottom = SCHEDULE_TABLE_TOP + 8 + plan.panels.length * 8
+  const gapStart = tableBottom + SCHEDULE_GAP_TOP_OFFSET
+  const noteTop = A4_LANDSCAPE_HEIGHT - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT
+  return gapStart + gapTableHeight(plan) + 4 > noteTop
+}
+
+function gapDetailsPageCount(plan: MeasurementPlan): number {
+  return Math.max(1, Math.ceil(plan.gaps.length / GAP_DETAILS_ROW_LIMIT))
+}
+
+function drawInstallationNotes(pdf: jsPDF, plan: MeasurementPlan, noteTop: number): void {
+  const pageW = pdf.internal.pageSize.getWidth()
+  const pageH = pdf.internal.pageSize.getHeight()
+  const margin = 14
+  const unit = plan.unit === 'cm' ? 'cm' : 'in'
+  pdf.setDrawColor(180, 180, 190)
+  pdf.setFillColor(248, 248, 250)
+  pdf.roundedRect(margin, noteTop, pageW - margin * 2, pageH - noteTop - SCHEDULE_NOTE_BOTTOM, 2, 2, 'FD')
+  pdf.setTextColor(55, 55, 66)
+  pdf.setFontSize(7.2)
+  pdf.text('Installation notes', margin + 4, noteTop + 7)
+  pdf.setTextColor(90, 90, 100)
+  pdf.setFontSize(6.8)
+  const notes = pdf.splitTextToSize(
+    `Hanging point assumption: ${plan.hangingPointAssumption} Use the Hang X / Hang Y coordinates as layout references only; do not infer a hook, cleat, wire, or bracket offset. Verify the actual hardware position against the frame and its manufacturer instructions. Outer dimensions include each panel's resolved frame edge width (${unit}).`,
+    pageW - margin * 2 - 8,
+  )
+  pdf.text(notes, margin + 4, noteTop + 12)
+}
+
+function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount: number): void {
   const pageW = pdf.internal.pageSize.getWidth()
   const pageH = pdf.internal.pageSize.getHeight()
   const margin = 14
@@ -434,10 +479,10 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan): void {
   pdf.text('Hanging-point assumption: no hardware offset is included. Confirm the actual hanger position from the frame or hardware manufacturer before drilling.', margin, footerY + 8)
   pdf.setTextColor(120, 120, 130)
   pdf.text(`Centerlines: vertical X ${formatMeasure(plan.centerlines.verticalX)} ${unit} · horizontal Y ${formatMeasure(plan.centerlines.horizontalY)} ${unit}`, margin, footerY + 14)
-  pdf.text('Page 1 of 2', pageW - margin, footerY + 14, { align: 'right' })
+  pdf.text(`Page 1 of ${pageCount}`, pageW - margin, footerY + 14, { align: 'right' })
 }
 
-function drawSchedulePage(pdf: jsPDF, plan: MeasurementPlan): void {
+function drawSchedulePage(pdf: jsPDF, plan: MeasurementPlan, pageCount: number): void {
   const pageW = pdf.internal.pageSize.getWidth()
   const pageH = pdf.internal.pageSize.getHeight()
   const margin = 14
@@ -451,25 +496,45 @@ function drawSchedulePage(pdf: jsPDF, plan: MeasurementPlan): void {
   pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} · ${plan.panels.length} frame${plan.panels.length === 1 ? '' : 's'}`, pageW - margin, 13.5, { align: 'right' })
   pdf.text('All distances are measured from the wall origin at the top-left. “Hang” is the assumed outer-frame top-center point.', margin, 20)
 
-  const tableBottom = drawMeasurementTable(pdf, plan, 29)
-  const y = drawGapTable(pdf, plan, tableBottom + 12)
-  const noteTop = Math.min(y + 4, pageH - 33)
-  pdf.setDrawColor(180, 180, 190)
-  pdf.setFillColor(248, 248, 250)
-  pdf.roundedRect(margin, noteTop, pageW - margin * 2, pageH - noteTop - 15, 2, 2, 'FD')
-  pdf.setTextColor(55, 55, 66)
-  pdf.setFontSize(7.2)
-  pdf.text('Installation notes', margin + 4, noteTop + 7)
-  pdf.setTextColor(90, 90, 100)
-  pdf.setFontSize(6.8)
-  const notes = pdf.splitTextToSize(
-    `Hanging point assumption: ${plan.hangingPointAssumption} Use the Hang X / Hang Y coordinates as layout references only; do not infer a hook, cleat, wire, or bracket offset. Verify the actual hardware position against the frame and its manufacturer instructions. Outer dimensions include each panel's resolved frame edge width (${unit}).`,
-    pageW - margin * 2 - 8,
-  )
-  pdf.text(notes, margin + 4, noteTop + 12)
+  const tableBottom = drawMeasurementTable(pdf, plan, SCHEDULE_TABLE_TOP)
+  const noteTop = pageH - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT
+  const hasGapDetailsPage = needsGapDetailsPage(plan)
+  if (hasGapDetailsPage) {
+    pdf.setTextColor(90, 90, 100)
+    pdf.setFontSize(7)
+    pdf.text('Aligned adjacent gaps and installation notes continue on the next page.', margin, tableBottom + SCHEDULE_GAP_TOP_OFFSET)
+  } else {
+    drawGapTable(pdf, plan, tableBottom + SCHEDULE_GAP_TOP_OFFSET)
+    drawInstallationNotes(pdf, plan, noteTop)
+  }
   pdf.setTextColor(120, 120, 130)
   pdf.setFontSize(7)
-  pdf.text('Page 2 of 2', pageW - margin, pageH - 7, { align: 'right' })
+  pdf.text(`Page 2 of ${pageCount}`, pageW - margin, pageH - 7, { align: 'right' })
+
+  if (hasGapDetailsPage) {
+    const detailsPages = gapDetailsPageCount(plan)
+    for (let pageIndex = 0; pageIndex < detailsPages; pageIndex++) {
+      pdf.addPage('a4', 'landscape')
+      pdf.setTextColor(25, 25, 32)
+      pdf.setFontSize(15)
+      pdf.text('Installation details', margin, 14)
+      pdf.setTextColor(100, 100, 112)
+      pdf.setFontSize(8)
+      pdf.text(
+        pageIndex === detailsPages - 1 ? 'Aligned adjacent gaps and installation notes' : 'Aligned adjacent gaps (continued)',
+        pageW - margin,
+        13.5,
+        { align: 'right' },
+      )
+      pdf.text('Gap dimensions are measured between the resolved outer frame edges.', margin, 20)
+
+      drawGapTable(pdf, plan, SCHEDULE_TABLE_TOP, pageIndex * GAP_DETAILS_ROW_LIMIT, GAP_DETAILS_ROW_LIMIT)
+      if (pageIndex === detailsPages - 1) drawInstallationNotes(pdf, plan, noteTop)
+      pdf.setTextColor(120, 120, 130)
+      pdf.setFontSize(7)
+      pdf.text(`Page ${pageIndex + 3} of ${pageCount}`, pageW - margin, pageH - 7, { align: 'right' })
+    }
+  }
 }
 
 export function buildMeasurementsPdf(plan?: MeasurementPlan): jsPDF {
@@ -481,8 +546,10 @@ export function buildMeasurementsPdf(plan?: MeasurementPlan): jsPDF {
     perPanelFrame: state.perPanelFrame,
     unit: state.unit,
   })
+  const detailsPages = needsGapDetailsPage(measurementPlan) ? gapDetailsPageCount(measurementPlan) : 0
+  const pageCount = 2 + detailsPages
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-  drawInstallationGuidePage(pdf, measurementPlan)
-  drawSchedulePage(pdf, measurementPlan)
+  drawInstallationGuidePage(pdf, measurementPlan, pageCount)
+  drawSchedulePage(pdf, measurementPlan, pageCount)
   return pdf
 }
