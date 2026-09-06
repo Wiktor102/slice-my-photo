@@ -20,7 +20,7 @@ export function LeftSidebar() {
   const deletePanel = useStore((s) => s.deletePanel)
   const selectPanel = useStore((s) => s.selectPanel)
 
-  const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame)))
+  const geoms = panels.map((p) => panelGeometry(p, resolveFrame(p, frame, perPanelFrame, unit)))
 
   return (
     <aside className="sidebar left">

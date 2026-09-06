@@ -31,7 +31,7 @@ export function RightSidebar() {
   const endHistoryGroup = useStore((s) => s.endHistoryGroup)
 
   const selected = panels.find((p) => p.id === selectedId) ?? null
-  const selFrame = selected ? resolveFrame(selected, frame, perPanelFrame) : null
+  const selFrame = selected ? resolveFrame(selected, frame, perPanelFrame, unit) : null
   const selGeom = selected && selFrame ? panelGeometry(selected, selFrame) : null
   const hasOverride = selected ? Boolean(perPanelFrame[selected.id]) : false
   const sizePresetOptions = FRAME_SIZES[unit]

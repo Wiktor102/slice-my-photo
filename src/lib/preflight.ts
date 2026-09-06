@@ -114,7 +114,7 @@ export function dpiBand(dpi: number): PreflightDpiBand {
 
 export function computePreflight(input: PreflightInput): PreflightReport {
   const { panels, frame, perPanelFrame, wall, unit, sourceImage, placement } = input
-  const geoms = panels.map((panel) => panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)))
+  const geoms = panels.map((panel) => panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame, unit)))
 
   const overlapIndexes = geoms.map((geom, index) => {
     const overlaps: number[] = []

@@ -1,5 +1,5 @@
 import type { FrameStyle, ImageTransform, Panel, PerPanelFrame, Rect, SnapGuide, SourceImage, Unit } from '../types'
-import { legacyPassepartout, MIN_OPENING_SIZE, normalizePassepartout } from './passepartout'
+import { legacyPassepartout, minimumOpeningSize, MIN_OPENING_SIZE, normalizePassepartout } from './passepartout'
 
 export const CM_PER_INCH = 2.54
 export const BASE_DPI = 300
@@ -20,15 +20,17 @@ export interface PanelGeometry {
   visible: Rect
 }
 
-export function resolveFrame(panel: Panel, global: FrameStyle, perPanel: Record<string, PerPanelFrame>): PerPanelFrame {
+export function resolveFrame(panel: Panel, global: FrameStyle, perPanel: Record<string, PerPanelFrame>, unit: Unit = 'cm'): PerPanelFrame {
+  const minOpening = minimumOpeningSize(unit)
   const override = global.perPanel ? perPanel[panel.id] : undefined
   if (override) {
     return {
       ...override,
-      passepartout: normalizePassepartout(panel, override),
+      unit,
+      passepartout: normalizePassepartout(panel, override, minOpening),
     }
   }
-  const pp = normalizePassepartout(panel, global)
+  const pp = normalizePassepartout(panel, global, minOpening)
   pp.colorKey = global.matColorKey ?? pp.colorKey
   pp.customColor = global.matCustomColor ?? pp.customColor
   return {
@@ -36,6 +38,7 @@ export function resolveFrame(panel: Panel, global: FrameStyle, perPanel: Record<
     colorKey: global.colorKey,
     customColor: global.customColor,
     shadow: global.shadow,
+    unit,
     passepartout: pp,
   }
 }
@@ -45,7 +48,7 @@ export function panelGeometry(panel: Panel, frame: PerPanelFrame): PanelGeometry
   const inner: Rect = { x: panel.x, y: panel.y, w: panel.width, h: panel.height }
   const outer: Rect = { x: inner.x - e, y: inner.y - e, w: inner.w + 2 * e, h: inner.h + 2 * e }
   const mat = frame.passepartout ?? legacyPassepartout(panel, frame)
-  const visible = visibleRect(inner, mat.enabled ? mat : { ...mat, enabled: false })
+  const visible = visibleRect(inner, mat.enabled ? mat : { ...mat, enabled: false }, minimumOpeningSize(frame.unit ?? 'cm'))
   return { inner, outer, visible }
 }
 
@@ -53,12 +56,12 @@ function clampMax(value: number, max: number): number {
   return Math.max(0, Math.min(value, max))
 }
 
-function visibleRect(inner: Rect, mat: PerPanelFrame['passepartout']): Rect {
+function visibleRect(inner: Rect, mat: PerPanelFrame['passepartout'], minOpeningSize = MIN_OPENING_SIZE): Rect {
   if (!mat.enabled) return { ...inner }
 
   if (mat.mode === 'opening') {
-    const w = Math.max(MIN_OPENING_SIZE, Math.min(mat.openingWidth, inner.w))
-    const h = Math.max(MIN_OPENING_SIZE, Math.min(mat.openingHeight, inner.h))
+    const w = Math.max(minOpeningSize, Math.min(mat.openingWidth, inner.w))
+    const h = Math.max(minOpeningSize, Math.min(mat.openingHeight, inner.h))
     return {
       x: inner.x + (inner.w - w) / 2,
       y: inner.y + (inner.h - h) / 2,
@@ -68,27 +71,27 @@ function visibleRect(inner: Rect, mat: PerPanelFrame['passepartout']): Rect {
   }
 
   if (mat.mode === 'margins') {
-    const maxW = Math.max(0, inner.w - MIN_OPENING_SIZE)
+    const maxW = Math.max(0, inner.w - minOpeningSize)
     const left = clampMax(mat.marginLeft, maxW)
     const right = clampMax(mat.marginRight, Math.max(0, maxW - left))
-    const maxH = Math.max(0, inner.h - MIN_OPENING_SIZE)
+    const maxH = Math.max(0, inner.h - minOpeningSize)
     const top = clampMax(mat.marginTop, maxH)
     const bottom = clampMax(mat.marginBottom, Math.max(0, maxH - top))
     return {
       x: inner.x + left,
       y: inner.y + top,
-      w: Math.max(MIN_OPENING_SIZE, inner.w - left - right),
-      h: Math.max(MIN_OPENING_SIZE, inner.h - top - bottom),
+      w: Math.max(minOpeningSize, inner.w - left - right),
+      h: Math.max(minOpeningSize, inner.h - top - bottom),
     }
   }
 
-  const insetX = clampMax(mat.inset, Math.max(0, (inner.w - MIN_OPENING_SIZE) / 2))
-  const insetY = clampMax(mat.inset, Math.max(0, (inner.h - MIN_OPENING_SIZE) / 2))
+  const insetX = clampMax(mat.inset, Math.max(0, (inner.w - minOpeningSize) / 2))
+  const insetY = clampMax(mat.inset, Math.max(0, (inner.h - minOpeningSize) / 2))
   return {
     x: inner.x + insetX,
     y: inner.y + insetY,
-    w: Math.max(MIN_OPENING_SIZE, inner.w - 2 * insetX),
-    h: Math.max(MIN_OPENING_SIZE, inner.h - 2 * insetY),
+    w: Math.max(minOpeningSize, inner.w - 2 * insetX),
+    h: Math.max(minOpeningSize, inner.h - 2 * insetY),
   }
 }
 

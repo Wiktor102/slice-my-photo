@@ -50,9 +50,5 @@ export function findPreset(unit: Unit, w: number, h: number): string {
 
 export function getPreset(unit: Unit, key: string): SizePreset | null {
   if (key === 'custom') return null
-  for (const unitList of Object.values(FRAME_SIZES)) {
-    const found = unitList.find((p) => p.key === key)
-    if (found) return found
-  }
-  return null
+  return FRAME_SIZES[unit].find((p) => p.key === key) ?? null
 }

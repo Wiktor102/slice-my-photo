@@ -5,6 +5,10 @@ export const DEFAULT_PASSEPARTOUT_COLOR: MatColorKey = 'white'
 export const DEFAULT_PASSEPARTOUT_CUSTOM_COLOR = '#ffffff'
 export const MIN_OPENING_SIZE = 1
 
+export function minimumOpeningSize(unit: Unit): number {
+  return unit === 'in' ? MIN_OPENING_SIZE / 2.54 : MIN_OPENING_SIZE
+}
+
 function unitFromPresetKey(key: string): Unit | null {
   if (key.startsWith('cm-')) return 'cm'
   if (key.startsWith('in-')) return 'in'
@@ -93,14 +97,15 @@ export function legacyPassepartout(panel: Pick<Panel, 'width' | 'height' | 'size
 export function normalizePassepartout(
   panel: Pick<Panel, 'width' | 'height' | 'sizePreset' | 'passepartout'>,
   legacy?: Partial<FrameStyle>,
+  minOpeningSize = MIN_OPENING_SIZE,
 ): PassepartoutSettings {
   const merged = {
     ...legacyPassepartout(panel, legacy),
     ...panel.passepartout,
   }
   if (merged.mode === 'opening') {
-    merged.openingWidth = Math.max(MIN_OPENING_SIZE, Math.min(merged.openingWidth, panel.width))
-    merged.openingHeight = Math.max(MIN_OPENING_SIZE, Math.min(merged.openingHeight, panel.height))
+    merged.openingWidth = Math.max(minOpeningSize, Math.min(merged.openingWidth, panel.width))
+    merged.openingHeight = Math.max(minOpeningSize, Math.min(merged.openingHeight, panel.height))
   }
   if (merged.mode === 'inset') {
     merged.inset = Math.max(0, Math.min(merged.inset, Math.min(panel.width, panel.height) / 2))

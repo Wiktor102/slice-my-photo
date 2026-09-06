@@ -430,14 +430,14 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                 <PanelNode
                   key={p.id}
                   panel={p}
-                  frame={resolveFrame(p, frame, perPanelFrame)}
+                  frame={resolveFrame(p, frame, perPanelFrame, unit)}
                   selected={!isPreview && selectedId === p.id}
                   image={imageEl}
                   sourceImage={sourceImage}
                   scale={placement.scale}
                   panX={placement.panX}
                   panY={placement.panY}
-                  others={panels.filter((q) => q.id !== p.id).map((q) => ({ panel: q, frame: resolveFrame(q, frame, perPanelFrame) }))}
+                  others={panels.filter((q) => q.id !== p.id).map((q) => ({ panel: q, frame: resolveFrame(q, frame, perPanelFrame, unit) }))}
                   viewportScale={scale}
                   showLabel={isPreview}
                   panelNumber={panels.indexOf(p) + 1}

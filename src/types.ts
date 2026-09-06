@@ -72,6 +72,8 @@ export interface PerPanelFrame {
   matWidth?: number
   matColorKey?: MatColorKey
   matCustomColor?: string
+  /** transient unit marker attached to resolved frames for geometry normalization */
+  unit?: Unit
 }
 
 export interface WallSetup {

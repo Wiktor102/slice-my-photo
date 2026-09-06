@@ -42,7 +42,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
     }
   }
 
-  const placement = computeImagePlacement(panels, frame, perPanelFrame, state.image, sourceImage)
+  const placement = computeImagePlacement(panels, frame, perPanelFrame, state.image, sourceImage, unit)
   const imgW = sourceImage.nativeWidth
   const imgH = sourceImage.nativeHeight
   const preflight = computePreflight({
@@ -61,7 +61,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
     .map((panel) => ({ index: panel.index, dpi: Math.round(panel.dpi) }))
 
   panels.forEach((panel, i) => {
-    const f = resolveFrame(panel, frame, perPanelFrame)
+    const f = resolveFrame(panel, frame, perPanelFrame, unit)
     const geom = panelGeometry(panel, f)
     const vis = geom.visible
     const visWCm = toCm(vis.w, unit)
@@ -106,7 +106,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
   if (options.includeVisualization) {
     const pxPerUnit = 1200 / Math.max(wall.width, wall.height)
     const visPanels: VisPanel[] = panels.map((panel, i) => {
-      const f = resolveFrame(panel, frame, perPanelFrame)
+      const f = resolveFrame(panel, frame, perPanelFrame, unit)
       const g = panelGeometry(panel, f)
       return {
         outerX: g.outer.x, outerY: g.outer.y, outerW: g.outer.w, outerH: g.outer.h,
@@ -215,7 +215,7 @@ export function buildMeasurementsPdf(): jsPDF {
 
   const sorted = [...panels].sort((a, b) => a.id.localeCompare(b.id))
   sorted.forEach((panel, i) => {
-    const f = resolveFrame(panel, frame, perPanelFrame)
+    const f = resolveFrame(panel, frame, perPanelFrame, unit)
     const g = panelGeometry(panel, f)
     const O = (v: number) => offX + v * scale
     const x = O(g.outer.x)
@@ -254,7 +254,7 @@ export function buildMeasurementsPdf(): jsPDF {
   // first-panel offset labels
   if (sorted.length > 0) {
     const first = sorted[0]
-    const fg = panelGeometry(first, resolveFrame(first, frame, perPanelFrame))
+    const fg = panelGeometry(first, resolveFrame(first, frame, perPanelFrame, unit))
     pdf.setDrawColor(150)
     pdf.setLineWidth(0.15)
     pdf.setFontSize(7)
@@ -268,8 +268,8 @@ export function buildMeasurementsPdf(): jsPDF {
   // gap labels between horizontally adjacent panels
   for (let i = 0; i < sorted.length; i++) {
     for (let j = i + 1; j < sorted.length; j++) {
-      const a = panelGeometry(sorted[i], resolveFrame(sorted[i], frame, perPanelFrame)).outer
-      const b = panelGeometry(sorted[j], resolveFrame(sorted[j], frame, perPanelFrame)).outer
+      const a = panelGeometry(sorted[i], resolveFrame(sorted[i], frame, perPanelFrame, unit)).outer
+      const b = panelGeometry(sorted[j], resolveFrame(sorted[j], frame, perPanelFrame, unit)).outer
       const horizontallyAdjacent = Math.abs(a.y - b.y) < 2 && b.x >= a.x + a.w - 0.5 && b.x < a.x + a.w + 50
       if (horizontallyAdjacent) {
         const gap = b.x - (a.x + a.w)
@@ -291,7 +291,7 @@ export function buildMeasurementsPdf(): jsPDF {
   const legendY = pageH - margin - 6
   pdf.setFontSize(8)
   pdf.setTextColor(60)
-  const matCount = panels.filter((panel) => resolveFrame(panel, frame, perPanelFrame).passepartout.enabled).length
+  const matCount = panels.filter((panel) => resolveFrame(panel, frame, perPanelFrame, unit).passepartout.enabled).length
   const matNote = matCount > 0 ? `Passepartout: ${matCount} panel${matCount === 1 ? '' : 's'}` : 'No passepartout'
   pdf.text(`Frame edge: ${frame.edgeWidth} ${u}   |   ${matNote}   |   Panels: ${panels.length}`, margin, legendY)
   return pdf
