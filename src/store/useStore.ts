@@ -115,7 +115,7 @@ interface State {
 
 type ProjectSnapshot = Pick<
   State,
-  'unit' | 'wall' | 'panels' | 'frame' | 'image' | 'presetActive' | 'gap' | 'currentSizeKey' | 'perPanelFrame'
+  'unit' | 'wall' | 'panels' | 'selectedId' | 'frame' | 'image' | 'presetActive' | 'gap' | 'currentSizeKey' | 'perPanelFrame'
 >
 
 interface HistoryGroup {
@@ -154,6 +154,7 @@ function cloneProjectSnapshot(snapshot: ProjectSnapshot): ProjectSnapshot {
       ...panel,
       ...(panel.passepartout ? { passepartout: { ...panel.passepartout } } : {}),
     })),
+    selectedId: snapshot.selectedId,
     frame: { ...snapshot.frame },
     image: { ...snapshot.image },
     presetActive: snapshot.presetActive,
@@ -173,6 +174,7 @@ function projectSnapshot(state: State): ProjectSnapshot {
     unit: state.unit,
     wall: state.wall,
     panels: state.panels,
+    selectedId: state.selectedId,
     frame: state.frame,
     image: state.image,
     presetActive: state.presetActive,
@@ -217,6 +219,7 @@ export const useStore = create<State>()(
       const historyPast: ProjectSnapshot[] = []
       const historyFuture: ProjectSnapshot[] = []
       let historyGroup: HistoryGroup | null = null
+      let toastTimer: ReturnType<typeof setTimeout> | null = null
 
       const syncHistoryAvailability = () => {
         rawSet({ canUndo: historyPast.length > 0, canRedo: historyFuture.length > 0 })
@@ -236,6 +239,11 @@ export const useStore = create<State>()(
         historyGroup = null
         commitHistoryEntry(group.before, projectSnapshot(get()))
       }
+
+      const selectedIdForSnapshot = (snapshot: ProjectSnapshot): string | null =>
+        snapshot.selectedId && snapshot.panels.some((panel) => panel.id === snapshot.selectedId)
+          ? snapshot.selectedId
+          : null
 
       const set: typeof rawSet = (partial, replace) => {
         const before = projectSnapshot(get())
@@ -612,8 +620,12 @@ export const useStore = create<State>()(
       setSaveLayoutOpen: (o) => rawSet({ saveLayoutOpen: o }),
       setLoadLayoutOpen: (o) => rawSet({ loadLayoutOpen: o }),
       showToast: (msg) => {
+        if (toastTimer) clearTimeout(toastTimer)
         rawSet({ toast: msg })
-        setTimeout(() => rawSet((s) => (s.toast === msg ? { toast: null } : {})), 2500)
+        toastTimer = setTimeout(() => {
+          toastTimer = null
+          rawSet((s) => (s.toast === msg ? { toast: null } : {}))
+        }, 2500)
       },
       loadLayout: (layout) => {
         const prevUnit = get().unit
@@ -652,8 +664,11 @@ export const useStore = create<State>()(
         const current = projectSnapshot(get())
         historyFuture.unshift(current)
         const target = cloneProjectSnapshot(previous)
+        const selectedId = selectedIdForSnapshot(target)
         rawSet({
           ...target,
+          selectedId,
+          ...(selectedId ? { imageSelected: false } : {}),
           canUndo: historyPast.length > 0,
           canRedo: historyFuture.length > 0,
         })
@@ -669,8 +684,11 @@ export const useStore = create<State>()(
         const current = projectSnapshot(get())
         historyPast.push(current)
         const target = cloneProjectSnapshot(next)
+        const selectedId = selectedIdForSnapshot(target)
         rawSet({
           ...target,
+          selectedId,
+          ...(selectedId ? { imageSelected: false } : {}),
           canUndo: historyPast.length > 0,
           canRedo: historyFuture.length > 0,
         })
