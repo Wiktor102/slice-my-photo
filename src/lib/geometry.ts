@@ -1,22 +1,17 @@
-import type { FrameStyle, ImageTransform, Panel, PerPanelFrame, Rect, SnapGuide, SourceImage, Unit } from '../types'
+import type { FrameStyle, ImageTransform, Panel, PerPanelFrame, Rect, SnapGuide, SourceImage } from '../types'
 import { legacyPassepartout, MIN_OPENING_SIZE, normalizePassepartout } from './passepartout'
+import { GAP_CLUSTER_TOLERANCE_MM } from './units'
 
+/** Kept for callers that use the export/preflight DPI helpers. */
 export const CM_PER_INCH = 2.54
 export const BASE_DPI = 300
 
-export function toCm(value: number, unit: Unit): number {
-  return unit === 'cm' ? value : value * CM_PER_INCH
-}
-export function fromCm(valueCm: number, unit: Unit): number {
-  return unit === 'cm' ? valueCm : valueCm / CM_PER_INCH
-}
-
 export interface PanelGeometry {
-  /** inner image-area rect (wall units) */
+  /** Inner image-area rect in canonical millimeters. */
   inner: Rect
-  /** outer frame rect (wall units) */
+  /** Outer frame rect in canonical millimeters. */
   outer: Rect
-  /** visible (post-mat) rect (wall units) */
+  /** Visible (post-mat) rect in canonical millimeters. */
   visible: Rect
 }
 
@@ -108,7 +103,7 @@ export function boundingBox(geoms: PanelGeometry[]): Rect | null {
 }
 
 /**
- * Image scale in wall-cm per source-pixel. Fill = cover, Fit = contain.
+ * Image scale in wall-mm per source-pixel. Fill = cover, Fit = contain.
  */
 export function imageScaleForMode(
   mode: ImageTransform['mode'],
@@ -124,16 +119,14 @@ export function imageScaleForMode(
   return fit * zoom
 }
 
-/**
- * Default pan centers the image over the bounding box.
- */
+/** Default pan centers the image over the bounding box. */
 export function defaultPan(bbox: Rect, scale: number, img: SourceImage): { panX: number; panY: number } {
   if (!bbox) return { panX: 0, panY: 0 }
-  const imgWCm = img.nativeWidth * scale
-  const imgHCm = img.nativeHeight * scale
+  const imgWMm = img.nativeWidth * scale
+  const imgHMm = img.nativeHeight * scale
   return {
-    panX: bbox.x - (imgWCm - bbox.w) / 2,
-    panY: bbox.y - (imgHCm - bbox.h) / 2,
+    panX: bbox.x - (imgWMm - bbox.w) / 2,
+    panY: bbox.y - (imgHMm - bbox.h) / 2,
   }
 }
 
@@ -233,13 +226,12 @@ function detectDominantGap(geoms: Rect[], axis: 'x' | 'y'): number | null {
   }
   if (gaps.length === 0) return null
   gaps.sort((a, b) => a - b)
-  const CLUSTER = 0.5
   let bestCount = 1
   let bestAvg = gaps[0]
   let curCount = 1
   let curSum = gaps[0]
   for (let i = 1; i < gaps.length; i++) {
-    if (gaps[i] - gaps[i - 1] <= CLUSTER) {
+    if (gaps[i] - gaps[i - 1] <= GAP_CLUSTER_TOLERANCE_MM) {
       curCount++
       curSum += gaps[i]
     } else {
