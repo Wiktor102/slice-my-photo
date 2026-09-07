@@ -16,7 +16,7 @@ import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
 import { findPreset } from '../lib/frameSizes'
 import { boundingBox, clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
-import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
+import { buildImageBlobs, buildSourceImage, isPersistable, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
 
 export type Screen = 'upload' | 'editor'
@@ -316,11 +316,19 @@ export const useStore = create<State>()(
           const warn = megapixels(dims.width, dims.height) < 1
             ? `This image is low resolution (${dims.width}×${dims.height}px). Prints may look soft at large sizes.`
             : null
-          await idbSetImage(img)
+          let recoveryWarning: string | null = null
+          if (!isPersistable(img.fullUrl)) {
+            const cleared = await idbClearImage()
+            recoveryWarning = cleared
+              ? 'This image is too large to restore after a page reload. You can keep working, but refreshing will lose it.'
+              : 'This image is too large to restore after a page reload. The current image stays active, but the browser could not clear previous recovery data. Refresh may restore an older image if one was already saved.'
+          } else if (!(await idbSetImage(img))) {
+            recoveryWarning = 'The browser could not save this image for recovery. The current image stays active, but refresh may restore an older image if one was already saved.'
+          }
           rawSet({
             sourceImage: img,
             imageLoading: false,
-            imageWarning: warn,
+            imageWarning: [warn, recoveryWarning].filter(Boolean).join(' ') || null,
             image: { ...DEFAULT_IMAGE },
           })
         } catch (e) {
