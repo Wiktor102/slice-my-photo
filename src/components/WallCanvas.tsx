@@ -12,23 +12,13 @@ import {
   VIEWPORT_WHEEL_MAX_SCALE_PX_PER_MM,
   VIEWPORT_WHEEL_MIN_SCALE_PX_PER_MM,
 } from '../lib/units'
+import { niceViewportStepMm } from '../lib/viewport'
 
 const PAD = 48
 const RULER = 22
 const EDITOR_BG = '#111114'
 const PREVIEW_BG = '#0e0e12'
 const WALL_OUTLINE = '#3fb950'
-
-function niceStep(raw: number): number {
-  const pow = Math.pow(10, Math.floor(Math.log10(raw)))
-  const n = raw / pow
-  let nice: number
-  if (n < 1.5) nice = 1
-  else if (n < 3) nice = 2
-  else if (n < 7) nice = 5
-  else nice = 10
-  return nice * pow
-}
 
 function formatNum(vMm: number, unit: 'cm' | 'in'): string {
   const v = fromMm(vMm, unit)
@@ -223,13 +213,13 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   const visBottom = viewport.y + size.h / scale
 
   // ruler ticks (world units, ~70px apart on screen)
-  const rStep = niceStep(70 / scale)
+  const rStep = niceViewportStepMm(70, scale, unit)
   const xTicks = ticksInRange(visLeft, visRight, rStep)
   const yTicks = ticksInRange(visTop, visBottom, rStep)
   const sx = (v: number) => (v - viewport.x) * scale
   const sy = (v: number) => (v - viewport.y) * scale
 
-  const gridStep = niceStep(50 / scale)
+  const gridStep = niceViewportStepMm(50, scale, unit)
 
   const handleBgDragStart = () => {
     const st = useStore.getState()

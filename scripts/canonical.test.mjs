@@ -33,9 +33,10 @@ try {
     viewportZoomPercent,
   } = await server.ssrLoadModule('/src/lib/units.ts')
   const { migrateMeasurements, migrateSavedLayout } = await server.ssrLoadModule('/src/lib/migrations.ts')
+  const { niceViewportStepMm } = await server.ssrLoadModule('/src/lib/viewport.ts')
   const { FRAME_SIZES, findPreset } = await server.ssrLoadModule('/src/lib/frameSizes.ts')
   const { PRESETS, instantiatePreset } = await server.ssrLoadModule('/src/lib/presets.ts')
-  const { useStore } = await server.ssrLoadModule('/src/store/useStore.ts')
+  const { normalizePersistedState, useStore } = await server.ssrLoadModule('/src/store/useStore.ts')
 
   assert.equal(toMm(1, 'cm'), 10)
   assert.equal(toMm(1, 'in'), 25.4)
@@ -75,6 +76,10 @@ try {
   }
   const migrated = migrateMeasurements(legacy, 2)
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≠ ${expected}`)
+  assert.equal(niceViewportStepMm(70, 0.3, 'cm'), 200)
+  assert.equal(niceViewportStepMm(50, 0.3, 'cm'), 200)
+  assert.equal(niceViewportStepMm(70, 0.3, 'in'), 254)
+  assert.equal(niceViewportStepMm(50, 0.3, 'in'), 127)
   close(migrated.wall.width, 2540)
   close(migrated.panels[0].width, 406.4)
   close(migrated.panels[0].passepartout.inset, 25.4)
@@ -103,6 +108,44 @@ try {
   close(sparseIn.frame.matWidth, 76.2)
   close(sparseIn.perPanelFrame['0'].edgeWidth, 50.8)
   close(sparseIn.perPanelFrame['0'].matWidth, 76.2)
+
+  const legacyMat = normalizePersistedState({
+    unit: 'cm',
+    wall: { width: 400, height: 300 },
+    panels: [
+      {
+        id: 'explicit-mat', width: 40, height: 60, x: 20, y: 30, sizePreset: 'cm-40x60',
+        passepartout: {
+          enabled: true, mode: 'margins', inset: 1, openingWidth: 36, openingHeight: 56,
+          marginTop: 1, marginRight: 2, marginBottom: 3, marginLeft: 4,
+          colorKey: 'black', customColor: '#111111',
+        },
+      },
+      { id: 'lifted-mat', width: 20, height: 30, x: 100, y: 100, sizePreset: 'custom' },
+    ],
+    frame: { edgeWidth: 2, matEnabled: true, matWidth: 1.5, matColorKey: 'white', matCustomColor: '#ffffff' },
+    perPanelFrame: {},
+    gap: 3,
+    image: { mode: 'fill', zoom: 1, panX: 0, panY: 0 },
+    viewport: { x: 0, y: 0, scale: 3 },
+  }, 2)
+  const explicitMat = legacyMat.panels[0].passepartout
+  assert.equal(explicitMat.mode, 'margins')
+  assert.equal(explicitMat.enabled, true)
+  assert.equal(explicitMat.colorKey, 'black')
+  assert.equal(explicitMat.customColor, '#111111')
+  close(explicitMat.inset, 10)
+  close(explicitMat.openingWidth, 360)
+  close(explicitMat.openingHeight, 560)
+  close(explicitMat.marginTop, 10)
+  close(explicitMat.marginRight, 20)
+  close(explicitMat.marginBottom, 30)
+  close(explicitMat.marginLeft, 40)
+  const liftedMat = legacyMat.panels[1].passepartout
+  assert.equal(liftedMat.enabled, true)
+  assert.equal(liftedMat.mode, 'inset')
+  assert.equal(liftedMat.colorKey, 'white')
+  close(liftedMat.inset, 15)
 
   const preset = PRESETS.find((entry) => entry.key === '2h')
   const inchPanels = instantiatePreset(preset, 'in-16x20', 'in', 30, 20, 3000, 2500)

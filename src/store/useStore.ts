@@ -212,6 +212,20 @@ export function normalizePersistedState(value: unknown, version = 2): unknown {
   const migrated = migrateMeasurements(value, version) as Partial<State>
   if (!migrated || !Array.isArray(migrated.panels)) return value
 
+  // migrateMeasurements preserves an explicit panel passepartout, but it
+  // cannot distinguish that from a panel which needs the legacy global mat
+  // fallback after fields have been normalized. Keep that presence check on
+  // the original persisted input instead of adding a marker to saved state.
+  const rawPanels = value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).panels)
+    ? (value as Record<string, unknown>).panels as unknown[]
+    : []
+  const hasExplicitPassepartout = (index: number): boolean => {
+    const rawPanel = rawPanels[index]
+    if (!rawPanel || typeof rawPanel !== 'object') return false
+    const rawPassepartout = (rawPanel as Record<string, unknown>).passepartout
+    return rawPassepartout !== undefined && rawPassepartout !== null
+  }
+
   const frame = migrated.frame ?? DEFAULT_FRAME
   const shouldLiftLegacyMat = Boolean(frame.matEnabled)
   return {
@@ -220,8 +234,8 @@ export function normalizePersistedState(value: unknown, version = 2): unknown {
     wall: migrateWall(migrated.wall, migrated.unit ?? 'cm', true),
     frame: migrateFrame(frame, migrated.unit ?? 'cm', true),
     perPanelFrame: migratePerPanelFrame(migrated.perPanelFrame, migrated.unit ?? 'cm', true),
-    panels: migrated.panels.map((panel) => {
-      const passepartout = shouldLiftLegacyMat
+    panels: migrated.panels.map((panel, index) => {
+      const passepartout = shouldLiftLegacyMat && !hasExplicitPassepartout(index)
         ? legacyPassepartout(panel, frame)
         : normalizePassepartout(panel)
       return { ...panel, displayUnit: panel.displayUnit ?? unitFromPresetKey(panel.sizePreset) ?? migrated.unit ?? 'cm', passepartout }
