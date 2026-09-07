@@ -137,15 +137,15 @@ export function defaultPan(bbox: Rect, scale: number, img: SourceImage): { panX:
   }
 }
 
+export function clampOuterPosition(position: number, size: number, limit: number): number {
+  return Math.max(0, Math.min(position, Math.max(0, limit - size)))
+}
+
 export function clampPanelToWall(panel: Panel, frame: PerPanelFrame, wallW: number, wallH: number): Panel {
   const g = panelGeometry(panel, frame)
   const e = frame.edgeWidth
-  let outerX = g.outer.x
-  let outerY = g.outer.y
-  if (outerX < 0) outerX = 0
-  if (outerY < 0) outerY = 0
-  if (outerX + g.outer.w > wallW) outerX = wallW - g.outer.w
-  if (outerY + g.outer.h > wallH) outerY = wallH - g.outer.h
+  const outerX = clampOuterPosition(g.outer.x, g.outer.w, wallW)
+  const outerY = clampOuterPosition(g.outer.y, g.outer.h, wallH)
   return { ...panel, x: outerX + e, y: outerY + e }
 }
 
