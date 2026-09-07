@@ -6,6 +6,12 @@ import { loadImage } from '../lib/imageUtils'
 import { resolveFrame } from '../lib/geometry'
 import { PanelNode } from './PanelNode'
 import type { SnapLines } from '../types'
+import {
+  fromMm,
+  VIEWPORT_FIT_MIN_SCALE_PX_PER_MM,
+  VIEWPORT_WHEEL_MAX_SCALE_PX_PER_MM,
+  VIEWPORT_WHEEL_MIN_SCALE_PX_PER_MM,
+} from '../lib/units'
 
 const PAD = 48
 const RULER = 22
@@ -24,7 +30,8 @@ function niceStep(raw: number): number {
   return nice * pow
 }
 
-function formatNum(v: number): string {
+function formatNum(vMm: number, unit: 'cm' | 'in'): string {
+  const v = fromMm(vMm, unit)
   return String(Math.round(v * 100) / 100)
 }
 
@@ -124,7 +131,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
   }, [sourceImage])
 
   const fit = (cw: number, ch: number) => {
-    const s = Math.max(0.2, Math.min((cw - 2 * PAD) / wall.width, (ch - 2 * PAD) / wall.height))
+    const s = Math.max(VIEWPORT_FIT_MIN_SCALE_PX_PER_MM, Math.min((cw - 2 * PAD) / wall.width, (ch - 2 * PAD) / wall.height))
     const x = wall.width / 2 - cw / 2 / s
     const y = wall.height / 2 - ch / 2 / s
     setViewport({ x, y, scale: s })
@@ -150,7 +157,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
     const imgW = src.nativeWidth * placement.scale
     const imgH = src.nativeHeight * placement.scale
     if (imgW <= 0 || imgH <= 0) return
-    const s = Math.max(0.2, Math.min((cw - 2 * PAD) / imgW, (ch - 2 * PAD) / imgH))
+    const s = Math.max(VIEWPORT_FIT_MIN_SCALE_PX_PER_MM, Math.min((cw - 2 * PAD) / imgW, (ch - 2 * PAD) / imgH))
     const x = placement.panX - (cw / 2 / s - imgW / 2)
     const y = placement.panY - (ch / 2 / s - imgH / 2)
     setViewport({ x, y, scale: s })
@@ -185,7 +192,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
       const py = e.clientY - rect.top
       const vp = useStore.getState().viewport
       const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
-      const newScale = Math.max(0.2, Math.min(40, vp.scale * factor))
+      const newScale = Math.max(VIEWPORT_WHEEL_MIN_SCALE_PX_PER_MM, Math.min(VIEWPORT_WHEEL_MAX_SCALE_PX_PER_MM, vp.scale * factor))
       const worldX = px / vp.scale + vp.x
       const worldY = py / vp.scale + vp.y
       setViewport({ scale: newScale, x: worldX - px / newScale, y: worldY - py / newScale })
@@ -517,7 +524,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                 return (
                   <Group key={`xt${i}`}>
                     <Line points={[x, RULER - (emph ? 10 : 6), x, RULER]} stroke={emph ? WALL_OUTLINE : '#5a5a66'} strokeWidth={emph ? 1.4 : 1} />
-                    <Text x={x + 2} y={3} text={formatNum(v)} fontSize={9} fill={emph ? WALL_OUTLINE : '#9a9aa8'} />
+                    <Text x={x + 2} y={3} text={formatNum(v, unit)} fontSize={9} fill={emph ? WALL_OUTLINE : '#9a9aa8'} />
                   </Group>
                 )
               })}
@@ -529,7 +536,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                 return (
                   <Group key={`yt${i}`}>
                     <Line points={[RULER - (emph ? 10 : 6), y, RULER, y]} stroke={emph ? WALL_OUTLINE : '#5a5a66'} strokeWidth={emph ? 1.4 : 1} />
-                    <Text x={2} y={y + 2} text={formatNum(v)} fontSize={9} fill={emph ? WALL_OUTLINE : '#9a9aa8'} />
+                    <Text x={2} y={y + 2} text={formatNum(v, unit)} fontSize={9} fill={emph ? WALL_OUTLINE : '#9a9aa8'} />
                   </Group>
                 )
               })}

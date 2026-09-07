@@ -4,6 +4,7 @@ import { getPreset } from '../lib/frameSizes'
 import { panelGeometry, panelsOverlap, resolveFrame } from '../lib/geometry'
 import { PresetIcon } from './PresetIcon'
 import { Trash2Icon } from 'lucide-react'
+import { formatMeasurement, fromMm, toMm } from '../lib/units'
 
 export function LeftSidebar() {
   const unit = useStore((s) => s.unit)
@@ -45,8 +46,8 @@ export function LeftSidebar() {
             type="number"
             min={0}
             step={0.5}
-            value={gap}
-            onChange={(e) => setGap(Number(e.target.value))}
+            value={fromMm(gap, unit)}
+            onChange={(e) => setGap(toMm(Number(e.target.value), unit))}
             disabled={!presetActive}
           />
         </div>
@@ -72,8 +73,9 @@ export function LeftSidebar() {
         ) : (
           <div className="panel-list">
             {panels.map((p, i) => {
-              const sizeKey = getPreset(unit, p.sizePreset)
-              const sizeLabel = sizeKey ? `${sizeKey.w}×${sizeKey.h}` : `${Math.round(p.width)}×${Math.round(p.height)}`
+              const panelUnit = p.displayUnit ?? unit
+              const sizeKey = getPreset(panelUnit, p.sizePreset)
+              const sizeLabel = sizeKey ? `${sizeKey.w}×${sizeKey.h}` : `${formatMeasurement(p.width, panelUnit)}×${formatMeasurement(p.height, panelUnit)}`
               const overlap = panelsOverlap(geoms, i)
               return (
                 <div
@@ -82,7 +84,7 @@ export function LeftSidebar() {
                   onClick={() => selectPanel(p.id)}
                 >
                   <span className="num">{i + 1}</span>
-                  <span className="size">{sizeLabel} {unit}</span>
+                  <span className="size">{sizeLabel} {panelUnit}</span>
                   {overlap && <span className="warn-dot" title="Overlaps another panel">⚠</span>}
                   <button
                     className="del"

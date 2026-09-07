@@ -1,4 +1,5 @@
 import type { SavedLayout } from '../types'
+import { migrateSavedLayout } from './migrations'
 
 const STORAGE_KEY = 'wallart-saved-layouts'
 export const MAX_LAYOUTS = 20
@@ -11,7 +12,7 @@ function readAll(): SavedLayout[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed
+    return parsed.map((layout) => migrateSavedLayout(layout as SavedLayout))
   } catch {
     return []
   }
