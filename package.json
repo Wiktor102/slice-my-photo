@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test:canonical": "node scripts/canonical.test.mjs",
     "test:measurement-pdf": "node scripts/measurement-pdf.test.mjs",
+    "test:keyboard": "node scripts/keyboard.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
