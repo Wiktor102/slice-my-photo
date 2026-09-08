@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Maximize2Icon, CropIcon, Grid3x3Icon, MagnetIcon } from 'lucide-react'
 import { useStore, useImagePlacement } from '../store/useStore'
+import {
+  VIEWPORT_CONTROL_MAX_SCALE_PX_PER_MM,
+  VIEWPORT_CONTROL_MIN_SCALE_PX_PER_MM,
+  VIEWPORT_CONTROL_STEP_PX_PER_MM,
+  VIEWPORT_FIT_MIN_SCALE_PX_PER_MM,
+  viewportZoomPercent,
+} from '../lib/units'
 
 const PAD = 48
 
@@ -30,7 +37,7 @@ export function BottomBar({ onZoomToFit, onZoomToImage }: Props) {
   const isFitWall = useMemo(() => {
     const { w, h } = canvasSize
     if (w <= 0 || h <= 0) return false
-    const s = Math.max(0.2, Math.min((w - 2 * PAD) / wall.width, (h - 2 * PAD) / wall.height))
+    const s = Math.max(VIEWPORT_FIT_MIN_SCALE_PX_PER_MM, Math.min((w - 2 * PAD) / wall.width, (h - 2 * PAD) / wall.height))
     const x = wall.width / 2 - w / 2 / s
     const y = wall.height / 2 - h / 2 / s
     const posTol = 0.5 / Math.max(viewport.scale, 0.001)
@@ -43,14 +50,14 @@ export function BottomBar({ onZoomToFit, onZoomToImage }: Props) {
     const imgW = sourceImage.nativeWidth * placement.scale
     const imgH = sourceImage.nativeHeight * placement.scale
     if (imgW <= 0 || imgH <= 0) return false
-    const s = Math.max(0.2, Math.min((w - 2 * PAD) / imgW, (h - 2 * PAD) / imgH))
+    const s = Math.max(VIEWPORT_FIT_MIN_SCALE_PX_PER_MM, Math.min((w - 2 * PAD) / imgW, (h - 2 * PAD) / imgH))
     const x = placement.panX - (w / 2 / s - imgW / 2)
     const y = placement.panY - (h / 2 / s - imgH / 2)
     const posTol = 0.5 / Math.max(viewport.scale, 0.001)
     return near(viewport.scale, s, 1e-4) && near(viewport.x, x, posTol) && near(viewport.y, y, posTol)
   }, [canvasSize, sourceImage, placement, viewport])
 
-  const zoomPercent = Math.round(viewport.scale * 100)
+  const zoomPercent = viewportZoomPercent(viewport.scale)
   const zoomRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
@@ -58,9 +65,9 @@ export function BottomBar({ onZoomToFit, onZoomToImage }: Props) {
     if (!el) return
     const handler = (e: WheelEvent) => {
       e.preventDefault()
-      const step = e.shiftKey ? 0.5 : 0.1
+      const step = e.shiftKey ? VIEWPORT_CONTROL_STEP_PX_PER_MM * 2 : VIEWPORT_CONTROL_STEP_PX_PER_MM
       const delta = e.deltaY < 0 ? step : -step
-      const next = Math.max(0.1, Math.min(5, viewport.scale + delta))
+      const next = Math.max(VIEWPORT_CONTROL_MIN_SCALE_PX_PER_MM, Math.min(VIEWPORT_CONTROL_MAX_SCALE_PX_PER_MM, viewport.scale + delta))
       setViewport({ scale: next })
     }
     el.addEventListener('wheel', handler, { passive: false })
@@ -86,7 +93,7 @@ export function BottomBar({ onZoomToFit, onZoomToImage }: Props) {
           min={10}
           max={500}
           value={zoomPercent}
-          onChange={(e) => setViewport({ scale: Number(e.target.value) / 100 })}
+          onChange={(e) => setViewport({ scale: Number(e.target.value) / 1000 })}
           title={`Zoom: ${zoomPercent}%`}
         />
         <span className="zoom-label">{zoomPercent}%</span>

@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:canonical": "node scripts/canonical.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
