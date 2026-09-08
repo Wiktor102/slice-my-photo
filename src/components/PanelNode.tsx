@@ -12,6 +12,7 @@ interface Props {
   panel: Panel
   frame: PerPanelFrame
   selected: boolean
+  transformable: boolean
   image: HTMLImageElement | undefined
   sourceImage: SourceImage | null
   scale: number
@@ -27,11 +28,12 @@ interface Props {
 }
 
 export function PanelNode({
-  panel, frame, selected, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, panelNumber, interactive, setSnapLines, setTip,
+  panel, frame, selected, transformable, image, sourceImage, scale, panX, panY, others, viewportScale, showLabel, panelNumber, interactive, setSnapLines, setTip,
 }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const setPanelOuterPosition = useStore((s) => s.setPanelOuterPosition)
+  const moveSelectedPanels = useStore((s) => s.moveSelectedPanels)
   const setPanelSize = useStore((s) => s.setPanelSize)
   const selectPanel = useStore((s) => s.selectPanel)
   const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
@@ -46,8 +48,14 @@ export function PanelNode({
   const frameColor = frameHex(frame.colorKey, frame.customColor)
   const matColor = matHex(mat.colorKey, mat.customColor)
 
-  const handleSelect = () => {
-    if (interactive) selectPanel(panel.id)
+  const handleSelect = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (!interactive) return
+    const additive = event.evt.shiftKey || event.evt.ctrlKey || event.evt.metaKey
+    const currentSelectedIds = useStore.getState().selectedIds
+    // Keep a multi-selection intact when the user starts dragging one of its
+    // members. Modifier clicks still toggle selection as expected.
+    if (!additive && selected && currentSelectedIds.length > 1) return
+    selectPanel(panel.id, additive)
   }
 
   useEffect(() => {
@@ -62,7 +70,7 @@ export function PanelNode({
         tr.nodes([])
       }
     }
-  }, [selected, outer.x, outer.y, outer.w, outer.h])
+  }, [selected, transformable, outer.x, outer.y, outer.w, outer.h])
 
   const handleDragMove = (ev: Konva.KonvaEventObject<DragEvent>) => {
     const node = ev.target as Konva.Group
@@ -87,7 +95,20 @@ export function PanelNode({
     node.x(ox)
     node.y(oy)
     setSnapLines({ vertical: res.vertical, horizontal: res.horizontal })
-    const unit = st.unit
+    const selectedCount = st.selectedIds.length
+    if (selectedCount > 1) {
+      moveSelectedPanels(panel.id, ox, oy)
+      const movedPanel = useStore.getState().panels.find((candidate) => candidate.id === panel.id)
+      if (movedPanel) {
+        ox = movedPanel.x - e
+        oy = movedPanel.y - e
+        node.x(ox)
+        node.y(oy)
+      }
+    } else {
+      setPanelOuterPosition(panel.id, ox, oy)
+    }
+    const unit = useStore.getState().unit
     const parts: string[] = [`X ${formatMeasurement(ox, unit, 1)}, Y ${formatMeasurement(oy, unit, 1)}`]
     const fmtGap = (g: number) => formatMeasurement(g, unit, 1)
     if (res.kindX === 'gap' && res.gapX != null) parts.push(`gap ${fmtGap(res.gapX)} ${unit}`)
@@ -95,7 +116,6 @@ export function PanelNode({
     if (res.kindY === 'gap' && res.gapY != null) parts.push(`gap ${fmtGap(res.gapY)} ${unit}`)
     else if (res.kindY === 'mid') parts.push('centered')
     setTip(parts.join(' · '))
-    setPanelOuterPosition(panel.id, ox, oy)
   }
 
   const handleDragStart = () => {
@@ -222,6 +242,18 @@ export function PanelNode({
         )}
       </Group>
       {selected && (
+        <Rect
+          x={outer.x}
+          y={outer.y}
+          width={outer.w}
+          height={outer.h}
+          stroke="#4a7dff"
+          strokeWidth={1.5 / viewportScale}
+          dash={[6 / viewportScale, 4 / viewportScale]}
+          listening={false}
+        />
+      )}
+      {transformable && (
         <Transformer
           ref={trRef}
           rotateEnabled={false}
