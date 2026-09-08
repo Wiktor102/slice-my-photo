@@ -19,6 +19,7 @@ export type PassepartoutMode = 'inset' | 'opening' | 'margins'
 export interface PassepartoutSettings {
   enabled: boolean
   mode: PassepartoutMode
+  /** All dimensions are canonical millimeters. */
   inset: number
   openingWidth: number
   openingHeight: number
@@ -32,16 +33,18 @@ export interface PassepartoutSettings {
 
 export interface Panel {
   id: string
-  /** inner image-area width (unit) */
+  /** Inner image-area width in canonical millimeters. */
   width: number
-  /** inner image-area height (unit) */
+  /** Inner image-area height in canonical millimeters. */
   height: number
-  /** inner image-area top-left X on the wall (unit) */
+  /** Inner image-area top-left X on the wall in canonical millimeters. */
   x: number
-  /** inner image-area top-left Y on the wall (unit) */
+  /** Inner image-area top-left Y on the wall in canonical millimeters. */
   y: number
   /** selected size preset key, or 'custom' */
   sizePreset: string
+  /** Unit used for this panel's preset and manual dimension fields. */
+  displayUnit?: Unit
   /** lock aspect ratio when resizing via numeric fields */
   lockAspect?: boolean
   /** per-frame mat / passepartout settings */
@@ -49,6 +52,7 @@ export interface Panel {
 }
 
 export interface FrameStyle {
+  /** Dimensions are canonical millimeters. */
   edgeWidth: number
   colorKey: FrameColorKey
   customColor: string
@@ -62,6 +66,7 @@ export interface FrameStyle {
 }
 
 export interface PerPanelFrame {
+  /** Dimensions are canonical millimeters. */
   edgeWidth: number
   colorKey: FrameColorKey
   customColor: string
@@ -75,6 +80,7 @@ export interface PerPanelFrame {
 }
 
 export interface WallSetup {
+  /** Dimensions are canonical millimeters. */
   width: number
   height: number
   color: string
@@ -84,7 +90,7 @@ export interface ImageTransform {
   mode: ImageMode
   /** zoom multiplier over the fit scale, range [1, 5] */
   zoom: number
-  /** image top-left offset in wall units */
+  /** Image top-left offset in canonical millimeters. */
   panX: number
   panY: number
 }
@@ -100,11 +106,11 @@ export interface SourceImage {
 }
 
 export interface Viewport {
-  /** world x (unit) at the canvas origin (top-left) */
+  /** World x in canonical millimeters at the canvas origin (top-left). */
   x: number
-  /** world y (unit) at the canvas origin */
+  /** World y in canonical millimeters at the canvas origin. */
   y: number
-  /** screen pixels per unit */
+  /** Screen pixels per canonical millimeter. */
   scale: number
 }
 
@@ -128,6 +134,8 @@ export interface SnapLines {
 }
 
 export interface SavedLayout {
+  /** Canonical measurement schema version. Missing means legacy display-unit values. */
+  measurementVersion?: number
   id: string
   name: string
   savedAt: number

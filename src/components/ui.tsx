@@ -219,13 +219,20 @@ export function CommitNumberField({
 }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
-  const display = editing ? text : String(Math.round(value * 100) / 100)
+  const [initialText, setInitialText] = useState('')
+  const formatted = String(Math.round(value * 100) / 100)
+  const display = editing ? text : formatted
   const beginEdit = () => {
+    const next = formatted
     setEditing(true)
-    setText(String(Math.round(value * 100) / 100))
+    setText(next)
+    setInitialText(next)
   }
   const commit = () => {
     setEditing(false)
+    // A rounded display is only a view. Blurring without editing must not
+    // replace a more precise canonical value with that rounded text.
+    if (text === initialText) return
     const v = Number(text)
     if (Number.isFinite(v)) {
       let out = v
