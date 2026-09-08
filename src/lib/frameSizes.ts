@@ -1,4 +1,5 @@
 import type { Unit } from '../types'
+import { toMm } from './units'
 
 export interface SizePreset {
   key: string
@@ -40,19 +41,21 @@ export const FRAME_SIZES: Record<Unit, SizePreset[]> = {
   ],
 }
 
-export function findPreset(unit: Unit, w: number, h: number): string {
+/** Find a preset for canonical millimeter dimensions without changing its identity. */
+export function findPreset(unit: Unit, wMm: number, hMm: number): string {
   const list = FRAME_SIZES[unit]
   const match = list.find(
-    (p) => (p.w === w && p.h === h) || (p.w === h && p.h === w),
+    (p) => {
+      const w = toMm(p.w, unit)
+      const h = toMm(p.h, unit)
+      return (Math.abs(w - wMm) < 1e-6 && Math.abs(h - hMm) < 1e-6)
+        || (Math.abs(w - hMm) < 1e-6 && Math.abs(h - wMm) < 1e-6)
+    },
   )
   return match ? match.key : 'custom'
 }
 
 export function getPreset(unit: Unit, key: string): SizePreset | null {
   if (key === 'custom') return null
-  for (const unitList of Object.values(FRAME_SIZES)) {
-    const found = unitList.find((p) => p.key === key)
-    if (found) return found
-  }
-  return null
+  return FRAME_SIZES[unit].find((p) => p.key === key) ?? null
 }

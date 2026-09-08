@@ -14,11 +14,21 @@ import type {
 } from '../types'
 import { instantiatePreset, makePanelId, PRESETS } from '../lib/presets'
 import { findPreset } from '../lib/frameSizes'
-import { boundingBox, clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
+import { boundingBox, clampOuterPosition, clampPanelToWall, defaultPan, imageScaleForMode, panelGeometry, resolveFrame } from '../lib/geometry'
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
-import { buildImageBlobs, buildSourceImage, megapixels, readImageDimensions } from '../lib/imageUtils'
+import { buildImageBlobs, buildSourceImage, isPersistable, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
 import type { PortableProject } from '../lib/portableProject'
+import {
+  CANONICAL_MEASUREMENT_VERSION,
+  migrateFrame,
+  migrateMeasurements,
+  migratePerPanelFrame,
+  migrateSavedLayout,
+  migrateWall,
+} from '../lib/migrations'
+import { MIN_PANEL_SIZE_MM, MIN_WALL_SIZE_MM, toMm, unitFromPresetKey } from '../lib/units'
+import { MIN_OPENING_SIZE } from '../lib/passepartout'
 
 export type Screen = 'upload' | 'editor'
 
@@ -40,6 +50,7 @@ interface State {
   presetActive: string | null
   gap: number
   currentSizeKey: string
+  measurementVersion: number
 
   viewport: Viewport
   showGrid: boolean
@@ -77,6 +88,7 @@ interface State {
   selectPanel: (id: string | null) => void
   selectImage: (b: boolean) => void
   updatePanel: (id: string, partial: Partial<Panel>) => void
+  setPanelDisplayUnit: (id: string, unit: Unit) => void
   setPanelSize: (id: string, w: number, h: number, presetKey: string) => void
   setPanelOuterPosition: (id: string, outerX: number, outerY: number) => void
   orientPanel: (id: string) => void
@@ -128,11 +140,11 @@ interface HistoryGroup {
 const MAX_HISTORY_ENTRIES = 100
 
 const DEFAULT_FRAME: FrameStyle = {
-  edgeWidth: 2,
+  edgeWidth: 20,
   colorKey: 'black',
   customColor: '#000000',
   matEnabled: false,
-  matWidth: 3,
+  matWidth: 30,
   matColorKey: 'white',
   matCustomColor: '#ffffff',
   shadow: true,
@@ -146,7 +158,7 @@ const DEFAULT_IMAGE: ImageTransform = {
   panY: 0,
 }
 
-const DEFAULT_WALL: WallSetup = { width: 300, height: 250, color: '#F5F5F5' }
+const DEFAULT_WALL: WallSetup = { width: 3000, height: 2500, color: '#F5F5F5' }
 
 function cloneProjectSnapshot(snapshot: ProjectSnapshot): ProjectSnapshot {
   return {
@@ -191,26 +203,44 @@ function snapshotsEqual(a: ProjectSnapshot, b: ProjectSnapshot): boolean {
 }
 
 function defaultSize(unit: Unit): [number, number] {
-  return unit === 'cm' ? [40, 60] : [16, 20]
+  return unit === 'cm' ? [400, 600] : [toMm(16, 'in'), toMm(20, 'in')]
 }
 
 function initialPassepartout(panel: Pick<Panel, 'width' | 'height' | 'sizePreset'>, frame: FrameStyle): PassepartoutSettings {
   return frame.matEnabled ? legacyPassepartout(panel, frame) : defaultPassepartout(panel)
 }
 
-function normalizePersistedState(value: unknown): unknown {
-  const state = value as Partial<State> | undefined
-  if (!state || !Array.isArray(state.panels)) return value
+export function normalizePersistedState(value: unknown, version = 2): unknown {
+  const migrated = migrateMeasurements(value, version) as Partial<State>
+  if (!migrated || !Array.isArray(migrated.panels)) return value
 
-  const frame = state.frame ?? DEFAULT_FRAME
+  // migrateMeasurements preserves an explicit panel passepartout, but it
+  // cannot distinguish that from a panel which needs the legacy global mat
+  // fallback after fields have been normalized. Keep that presence check on
+  // the original persisted input instead of adding a marker to saved state.
+  const rawPanels = value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).panels)
+    ? (value as Record<string, unknown>).panels as unknown[]
+    : []
+  const hasExplicitPassepartout = (index: number): boolean => {
+    const rawPanel = rawPanels[index]
+    if (!rawPanel || typeof rawPanel !== 'object') return false
+    const rawPassepartout = (rawPanel as Record<string, unknown>).passepartout
+    return rawPassepartout !== undefined && rawPassepartout !== null
+  }
+
+  const frame = migrated.frame ?? DEFAULT_FRAME
   const shouldLiftLegacyMat = Boolean(frame.matEnabled)
   return {
-    ...state,
-    panels: state.panels.map((panel) => {
-      const passepartout = shouldLiftLegacyMat
+    ...migrated,
+    measurementVersion: CANONICAL_MEASUREMENT_VERSION,
+    wall: migrateWall(migrated.wall, migrated.unit ?? 'cm', true),
+    frame: migrateFrame(frame, migrated.unit ?? 'cm', true),
+    perPanelFrame: migratePerPanelFrame(migrated.perPanelFrame, migrated.unit ?? 'cm', true),
+    panels: migrated.panels.map((panel, index) => {
+      const passepartout = shouldLiftLegacyMat && !hasExplicitPassepartout(index)
         ? legacyPassepartout(panel, frame)
         : normalizePassepartout(panel)
-      return { ...panel, passepartout }
+      return { ...panel, displayUnit: panel.displayUnit ?? unitFromPresetKey(panel.sizePreset) ?? migrated.unit ?? 'cm', passepartout }
     }),
   }
 }
@@ -266,9 +296,17 @@ export const useStore = create<State>()(
           .map((panel) => ({ ...panel, passepartout: initialPassepartout(panel, frame) }))
       }
 
+      const clampPanelsToWall = (
+        panels: Panel[],
+        frame: FrameStyle,
+        perPanelFrame: Record<string, PerPanelFrame>,
+        wall: WallSetup,
+      ) => panels.map((panel) => clampPanelToWall(panel, resolveFrame(panel, frame, perPanelFrame), wall.width, wall.height))
+
       return {
       screen: 'upload',
       unit: 'cm',
+      measurementVersion: CANONICAL_MEASUREMENT_VERSION,
       sourceImage: null,
       imageLoading: false,
       imageWarning: null,
@@ -282,10 +320,10 @@ export const useStore = create<State>()(
       frame: { ...DEFAULT_FRAME },
       image: { ...DEFAULT_IMAGE },
       presetActive: null,
-      gap: 3,
+      gap: 30,
       currentSizeKey: 'cm-40x60',
 
-      viewport: { x: 0, y: 0, scale: 3 },
+      viewport: { x: 0, y: 0, scale: 0.3 },
       showGrid: true,
       gapSnapEnabled: true,
       preview: false,
@@ -318,11 +356,19 @@ export const useStore = create<State>()(
           const warn = megapixels(dims.width, dims.height) < 1
             ? `This image is low resolution (${dims.width}×${dims.height}px). Prints may look soft at large sizes.`
             : null
-          await idbSetImage(img)
+          let recoveryWarning: string | null = null
+          if (!isPersistable(img.fullUrl)) {
+            const cleared = await idbClearImage()
+            recoveryWarning = cleared
+              ? 'This image is too large to restore after a page reload. You can keep working, but refreshing will lose it.'
+              : 'This image is too large to restore after a page reload. The current image stays active, but the browser could not clear previous recovery data. Refresh may restore an older image if one was already saved.'
+          } else if (!(await idbSetImage(img))) {
+            recoveryWarning = 'The browser could not save this image for recovery. The current image stays active, but refresh may restore an older image if one was already saved.'
+          }
           rawSet({
             sourceImage: img,
             imageLoading: false,
-            imageWarning: warn,
+            imageWarning: [warn, recoveryWarning].filter(Boolean).join(' ') || null,
             image: { ...DEFAULT_IMAGE },
           })
         } catch (e) {
@@ -354,11 +400,11 @@ export const useStore = create<State>()(
 
       setWall: (partial) => {
         const wall = { ...get().wall, ...partial }
-        if (wall.width < 10) wall.width = 10
-        if (wall.height < 10) wall.height = 10
+        if (wall.width < MIN_WALL_SIZE_MM) wall.width = MIN_WALL_SIZE_MM
+        if (wall.height < MIN_WALL_SIZE_MM) wall.height = MIN_WALL_SIZE_MM
         // clamp all panels into the new wall
         const { panels, frame, perPanelFrame } = get()
-        const clamped = panels.map((p) => clampPanelToWall(p, resolveFrame(p, frame, perPanelFrame), wall.width, wall.height))
+        const clamped = clampPanelsToWall(panels, frame, perPanelFrame, wall)
         set({ wall, panels: clamped })
       },
 
@@ -417,7 +463,7 @@ export const useStore = create<State>()(
         const innerX = (wall.width - w) / 2
         const innerY = (wall.height - h) / 2
         const sizePreset = findPreset(unit, w, h)
-        const panel: Panel = { id: makePanelId(), width: w, height: h, x: innerX, y: innerY, sizePreset, passepartout: initialPassepartout({ width: w, height: h, sizePreset }, frame) }
+        const panel: Panel = { id: makePanelId(), width: w, height: h, x: innerX, y: innerY, sizePreset, displayUnit: unit, passepartout: initialPassepartout({ width: w, height: h, sizePreset }, frame) }
         set({ panels: [...panels, panel], selectedId: panel.id, presetActive: null })
       },
 
@@ -452,46 +498,65 @@ export const useStore = create<State>()(
       },
 
       updatePanel: (id, partial) => {
-        const { unit } = get()
+        const { unit, panels, frame, perPanelFrame, wall } = get()
+        const nextPanels = panels.map((p) => {
+          if (p.id !== id) return p
+          const merged = { ...p, ...partial }
+          if (partial.width !== undefined) merged.width = Math.max(MIN_PANEL_SIZE_MM, merged.width)
+          if (partial.height !== undefined) merged.height = Math.max(MIN_PANEL_SIZE_MM, merged.height)
+          if (partial.width !== undefined || partial.height !== undefined) {
+            merged.sizePreset = findPreset(merged.displayUnit ?? unit, merged.width, merged.height)
+          }
+          return merged
+        })
         set({
-          panels: get().panels.map((p) => {
-            if (p.id !== id) return p
-            const merged = { ...p, ...partial }
-            if (partial.width !== undefined || partial.height !== undefined) {
-              merged.sizePreset = findPreset(unit, merged.width, merged.height)
-            }
-            return merged
-          }),
+          panels: clampPanelsToWall(nextPanels, frame, perPanelFrame, wall),
           presetActive: null,
         })
       },
 
+      setPanelDisplayUnit: (id, displayUnit) => {
+        const { panels } = get()
+        const nextPanels = panels.map((panel) => {
+          if (panel.id !== id) return panel
+          return {
+            ...panel,
+            displayUnit,
+            sizePreset: findPreset(displayUnit, panel.width, panel.height),
+          }
+        })
+        // Unit preference is presentation metadata. Keep all canonical
+        // dimensions and positions byte-for-byte unchanged.
+        set({ panels: nextPanels, presetActive: null })
+      },
+
       setPanelSize: (id, w, h, presetKey) => {
-        const min = 10
-        const width = Math.max(min, w)
-        const height = Math.max(min, h)
-        const unit = get().unit
+        const width = Math.max(MIN_PANEL_SIZE_MM, w)
+        const height = Math.max(MIN_PANEL_SIZE_MM, h)
+        const { unit, panels, frame, perPanelFrame, wall } = get()
+        const nextPanels = panels.map((p) => {
+          if (p.id !== id) return p
+          const displayUnit = unitFromPresetKey(presetKey) ?? p.displayUnit ?? unit
+          const next = { ...p, width, height, sizePreset: presetKey, displayUnit }
+          const current = normalizePassepartout(p)
+          if (current.enabled) {
+            if (current.mode === 'opening') {
+              current.openingWidth = Math.max(MIN_OPENING_SIZE, Math.min(current.openingWidth, width))
+              current.openingHeight = Math.max(MIN_OPENING_SIZE, Math.min(current.openingHeight, height))
+            }
+            if (current.mode === 'inset') {
+              current.inset = Math.max(0, Math.min(current.inset, Math.min(width, height) / 2))
+            }
+          }
+          return {
+            ...next,
+            passepartout: current.enabled
+              ? current
+              : defaultPassepartout({ width, height, sizePreset: presetKey === 'custom' ? findPreset(displayUnit, width, height) : presetKey }),
+          }
+        })
         set({
-          panels: get().panels.map((p) => {
-            if (p.id !== id) return p
-            const next = { ...p, width, height, sizePreset: presetKey }
-            const current = normalizePassepartout(p)
-            if (current.enabled) {
-              if (current.mode === 'opening') {
-                current.openingWidth = Math.max(1, Math.min(current.openingWidth, width))
-                current.openingHeight = Math.max(1, Math.min(current.openingHeight, height))
-              }
-              if (current.mode === 'inset') {
-                current.inset = Math.max(0, Math.min(current.inset, Math.min(width, height) / 2))
-              }
-            }
-            return {
-              ...next,
-              passepartout: current.enabled
-                ? current
-                : defaultPassepartout({ width, height, sizePreset: presetKey === 'custom' ? findPreset(unit, width, height) : presetKey }),
-            }
-          }),
+          panels: clampPanelsToWall(nextPanels, frame, perPanelFrame, wall),
           presetActive: null,
         })
       },
@@ -503,38 +568,42 @@ export const useStore = create<State>()(
         const f = resolveFrame(panel, frame, perPanelFrame)
         const e = f.edgeWidth
         const g = panelGeometry(panel, f)
-        let ox = outerX
-        let oy = outerY
-        if (ox < 0) ox = 0
-        if (oy < 0) oy = 0
-        if (ox + g.outer.w > wall.width) ox = wall.width - g.outer.w
-        if (oy + g.outer.h > wall.height) oy = wall.height - g.outer.h
+        const ox = clampOuterPosition(outerX, g.outer.w, wall.width)
+        const oy = clampOuterPosition(outerY, g.outer.h, wall.height)
         set({
           panels: get().panels.map((p) => (p.id === id ? { ...p, x: ox + e, y: oy + e } : p)),
         })
       },
 
       orientPanel: (id) => {
+        const { unit, panels, frame, perPanelFrame, wall } = get()
+        const nextPanels = panels.map((p) =>
+          p.id === id
+            ? {
+              ...p,
+              width: p.height,
+              height: p.width,
+              sizePreset: findPreset(p.displayUnit ?? unit, p.height, p.width),
+              passepartout: rotatePassepartout(p.passepartout),
+            }
+            : p,
+        )
         set({
-          panels: get().panels.map((p) =>
-            p.id === id
-              ? {
-                ...p,
-                width: p.height,
-                height: p.width,
-                sizePreset: findPreset(get().unit, p.height, p.width),
-                passepartout: rotatePassepartout(p.passepartout),
-              }
-              : p,
-          ),
+          panels: clampPanelsToWall(nextPanels, frame, perPanelFrame, wall),
           presetActive: null,
         })
       },
 
       setFrame: (partial) => {
-        const { frame, perPanelFrame, selectedId } = get()
+        const { frame, perPanelFrame, selectedId, panels, wall } = get()
         if ('perPanel' in partial) {
-          set({ frame: { ...frame, ...partial } })
+          const nextFrame = {
+            ...frame,
+            ...partial,
+            ...(partial.edgeWidth === undefined ? {} : { edgeWidth: Math.max(0, partial.edgeWidth) }),
+            ...(partial.matWidth === undefined ? {} : { matWidth: Math.max(0, partial.matWidth) }),
+          }
+          set({ frame: nextFrame, panels: clampPanelsToWall(panels, nextFrame, perPanelFrame, wall) })
           return
         }
         if (frame.perPanel && selectedId) {
@@ -545,17 +614,35 @@ export const useStore = create<State>()(
             shadow: frame.shadow,
             passepartout: normalizePassepartout(get().panels.find((p) => p.id === selectedId)!, frame),
           }
-          set({ perPanelFrame: { ...perPanelFrame, [selectedId]: { ...existing, ...partial } } })
+          const nextPerPanelFrame = {
+            ...perPanelFrame,
+            [selectedId]: {
+              ...existing,
+              ...partial,
+              ...(partial.edgeWidth === undefined ? {} : { edgeWidth: Math.max(0, partial.edgeWidth) }),
+              ...(partial.matWidth === undefined ? {} : { matWidth: Math.max(0, partial.matWidth) }),
+            },
+          }
+          set({
+            perPanelFrame: nextPerPanelFrame,
+            panels: clampPanelsToWall(panels, frame, nextPerPanelFrame, wall),
+          })
         } else {
-          set({ frame: { ...frame, ...partial } })
+          const nextFrame = {
+            ...frame,
+            ...partial,
+            ...(partial.edgeWidth === undefined ? {} : { edgeWidth: Math.max(0, partial.edgeWidth) }),
+            ...(partial.matWidth === undefined ? {} : { matWidth: Math.max(0, partial.matWidth) }),
+          }
+          set({ frame: nextFrame, panels: clampPanelsToWall(panels, nextFrame, perPanelFrame, wall) })
         }
       },
 
       resetFrameToGlobal: (id) => {
-        const { perPanelFrame } = get()
+        const { perPanelFrame, frame, panels, wall } = get()
         const next = { ...perPanelFrame }
         delete next[id]
-        set({ perPanelFrame: next })
+        set({ perPanelFrame: next, panels: clampPanelsToWall(panels, frame, next, wall) })
       },
 
       updatePassepartout: (id, partial) => {
@@ -565,8 +652,8 @@ export const useStore = create<State>()(
             const current = normalizePassepartout(p)
             const merged = { ...current, ...partial }
             if (merged.mode === 'opening') {
-              merged.openingWidth = Math.max(1, Math.min(merged.openingWidth, p.width))
-              merged.openingHeight = Math.max(1, Math.min(merged.openingHeight, p.height))
+              merged.openingWidth = Math.max(MIN_OPENING_SIZE, Math.min(merged.openingWidth, p.width))
+              merged.openingHeight = Math.max(MIN_OPENING_SIZE, Math.min(merged.openingHeight, p.height))
             }
             if (merged.mode === 'inset') {
               merged.inset = Math.max(0, Math.min(merged.inset, Math.min(p.width, p.height) / 2))
@@ -630,28 +717,30 @@ export const useStore = create<State>()(
         }, 2500)
       },
       loadLayout: (layout) => {
+        const canonicalLayout = migrateSavedLayout(layout)
         const prevUnit = get().unit
         set({
-          unit: layout.unit,
-          wall: { ...layout.wall },
-          panels: layout.panels.map((p) => ({ ...p, passepartout: normalizePassepartout(p, layout.frame) })),
-          frame: { ...layout.frame },
+          unit: canonicalLayout.unit,
+          measurementVersion: CANONICAL_MEASUREMENT_VERSION,
+          wall: { ...canonicalLayout.wall },
+          panels: canonicalLayout.panels.map((p) => ({ ...p, passepartout: normalizePassepartout(p, canonicalLayout.frame) })),
+          frame: { ...canonicalLayout.frame },
           perPanelFrame: Object.fromEntries(
-            Object.entries(layout.perPanelFrame).map(([id, panelFrame]) => [id, {
+            Object.entries(canonicalLayout.perPanelFrame).map(([id, panelFrame]) => [id, {
               ...panelFrame,
               passepartout: { ...panelFrame.passepartout },
             }]),
           ),
-          gap: layout.gap,
-          currentSizeKey: layout.currentSizeKey,
-          presetActive: layout.presetActive,
+          gap: canonicalLayout.gap,
+          currentSizeKey: canonicalLayout.currentSizeKey,
+          presetActive: canonicalLayout.presetActive,
           selectedId: null,
           imageSelected: false,
           image: { ...DEFAULT_IMAGE },
           loadLayoutOpen: false,
         })
-        if (layout.unit !== prevUnit) {
-          const label = layout.unit === 'cm' ? 'cm' : 'inches'
+        if (canonicalLayout.unit !== prevUnit) {
+          const label = canonicalLayout.unit === 'cm' ? 'cm' : 'inches'
           setTimeout(() => get().showToast(`Units switched to ${label} to match the loaded layout.`), 100)
         }
       },
@@ -766,8 +855,8 @@ export const useStore = create<State>()(
           frame: { ...DEFAULT_FRAME },
           image: { ...DEFAULT_IMAGE },
           presetActive: null,
-          gap: 3,
-          viewport: { x: 0, y: 0, scale: 3 },
+          gap: 30,
+          viewport: { x: 0, y: 0, scale: 0.3 },
           preview: false,
           exportOpen: false,
           confirmReset: false,
@@ -776,9 +865,10 @@ export const useStore = create<State>()(
     },
     {
       name: 'slice-my-photo-state',
-      version: 2,
+      version: CANONICAL_MEASUREMENT_VERSION,
       migrate: normalizePersistedState,
       partialize: (s) => ({
+        measurementVersion: CANONICAL_MEASUREMENT_VERSION,
         unit: s.unit,
         wall: s.wall,
         panels: s.panels,

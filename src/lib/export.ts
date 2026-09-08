@@ -2,7 +2,15 @@ import JSZip from 'jszip'
 import { jsPDF } from 'jspdf'
 import { saveAs } from 'file-saver'
 import { useStore, computeImagePlacement } from '../store/useStore'
-import { panelGeometry, resolveFrame, toCm, fromCm, BASE_DPI, CM_PER_INCH } from './geometry'
+import { panelGeometry, resolveFrame, BASE_DPI, CM_PER_INCH } from './geometry'
+import {
+  EXPORT_ADJACENCY_ALIGNMENT_TOLERANCE_MM,
+  EXPORT_ADJACENCY_MAX_GAP_MM,
+  EXPORT_ADJACENCY_START_TOLERANCE_MM,
+  EXPORT_MIN_GAP_LABEL_MM,
+  formatMeasurement,
+  toMm,
+} from './units'
 import { frameHex, matHex } from './frameColors'
 import { computePreflight, sourceCoverageForRect } from './preflight'
 import type { PreflightReport } from './preflight'
@@ -64,8 +72,8 @@ export function computePlan(options: ExportOptions): ExportPlan {
     const f = resolveFrame(panel, frame, perPanelFrame)
     const geom = panelGeometry(panel, f)
     const vis = geom.visible
-    const visWCm = toCm(vis.w, unit)
-    const visHCm = toCm(vis.h, unit)
+    const visWmm = vis.w
+    const visHmm = vis.h
 
     let relX = (vis.x - placement.panX) / placement.scale
     let relY = (vis.y - placement.panY) / placement.scale
@@ -73,7 +81,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
     let relH = vis.h / placement.scale
 
     if (options.bleedCm > 0) {
-      const bleedWall = fromCm(options.bleedCm, unit)
+      const bleedWall = toMm(options.bleedCm, 'cm')
       const bleedPx = bleedWall / placement.scale
       relX -= bleedPx
       relY -= bleedPx
@@ -81,8 +89,9 @@ export function computePlan(options: ExportOptions): ExportPlan {
       relH += 2 * bleedPx
     }
 
-    let outW = Math.round(((visWCm + 2 * options.bleedCm) / CM_PER_INCH) * BASE_DPI)
-    let outH = Math.round(((visHCm + 2 * options.bleedCm) / CM_PER_INCH) * BASE_DPI)
+    const bleedMm = toMm(options.bleedCm, 'cm')
+    let outW = Math.round(((visWmm + 2 * bleedMm) / (10 * CM_PER_INCH)) * BASE_DPI)
+    let outH = Math.round(((visHmm + 2 * bleedMm) / (10 * CM_PER_INCH)) * BASE_DPI)
 
     // cap to available source resolution
     const coverage = sourceCoverageForRect({ x: relX, y: relY, w: relW, h: relH }, imgW, imgH)
@@ -104,7 +113,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
 
   let visualization: VisSpec | null = null
   if (options.includeVisualization) {
-    const pxPerUnit = 1200 / Math.max(wall.width, wall.height)
+    const pxPerMm = 1200 / Math.max(wall.width, wall.height)
     const visPanels: VisPanel[] = panels.map((panel, i) => {
       const f = resolveFrame(panel, frame, perPanelFrame)
       const g = panelGeometry(panel, f)
@@ -119,7 +128,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
       }
     })
     visualization = {
-      wallW: wall.width, wallH: wall.height, wallColor: wall.color, pxPerUnit,
+      wallW: wall.width, wallH: wall.height, wallColor: wall.color, pxPerMm,
       imgNativeW: sourceImage.nativeWidth, imgNativeH: sourceImage.nativeHeight,
       panX: placement.panX, panY: placement.panY, scale: placement.scale,
       panels: visPanels,
@@ -188,8 +197,8 @@ export async function runExport(options: ExportOptions, onProgress: (done: numbe
 export function buildMeasurementsPdf(): jsPDF {
   const state = useStore.getState()
   const { panels, frame, perPanelFrame, wall, unit } = state
-  const u = unit === 'cm' ? 'cm' : 'in'
-  // landscape A4 in points (1pt = 1/72 inch); we work in cm via unit scale
+  const u = unit
+  // Landscape A4. jsPDF uses millimeters for page coordinates.
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = pdf.internal.pageSize.getWidth()
   const pageH = pdf.internal.pageSize.getHeight()
@@ -206,7 +215,7 @@ export function buildMeasurementsPdf(): jsPDF {
   pdf.text('Measurements Sheet', margin, margin)
   pdf.setFontSize(9)
   pdf.setTextColor(120)
-  pdf.text(`Wall: ${wall.width} × ${wall.height} ${u}`, pageW - margin, margin, { align: 'right' })
+  pdf.text(`Wall: ${formatMeasurement(wall.width, u)} × ${formatMeasurement(wall.height, u)} ${u}`, pageW - margin, margin, { align: 'right' })
 
   // wall
   pdf.setDrawColor(60)
@@ -239,8 +248,9 @@ export function buildMeasurementsPdf(): jsPDF {
     // outer dim label
     pdf.setFontSize(7)
     pdf.setTextColor(60)
-    const outerLabel = `${g.outer.w} × ${g.outer.h} ${u}`
-    const innerLabel = `(${g.inner.w} × ${g.inner.h} ${u} image area)`
+    const panelUnit = panel.displayUnit ?? unit
+    const outerLabel = `${formatMeasurement(g.outer.w, panelUnit)} × ${formatMeasurement(g.outer.h, panelUnit)} ${panelUnit}`
+    const innerLabel = `(${formatMeasurement(g.inner.w, panelUnit)} × ${formatMeasurement(g.inner.h, panelUnit)} ${panelUnit} image area)`
     if (w > 30 && h > 14) {
       pdf.text(outerLabel, x + w / 2, y + h / 2 + 6, { align: 'center' })
       pdf.setFontSize(6)
@@ -260,9 +270,9 @@ export function buildMeasurementsPdf(): jsPDF {
     pdf.setFontSize(7)
     pdf.setTextColor(120)
     pdf.line(offX, offY - 4, offX + fg.outer.x * scale, offY - 4)
-    pdf.text(`${fg.outer.x} ${u}`, offX + (fg.outer.x * scale) / 2, offY - 5.5, { align: 'center' })
+    pdf.text(`${formatMeasurement(fg.outer.x, u)} ${u}`, offX + (fg.outer.x * scale) / 2, offY - 5.5, { align: 'center' })
     pdf.line(offX - 4, offY, offX - 4, offY + fg.outer.y * scale)
-    pdf.text(`${fg.outer.y} ${u}`, offX - 5, offY + (fg.outer.y * scale) / 2, { align: 'right' })
+    pdf.text(`${formatMeasurement(fg.outer.y, u)} ${u}`, offX - 5, offY + (fg.outer.y * scale) / 2, { align: 'right' })
   }
 
   // gap labels between horizontally adjacent panels
@@ -270,10 +280,12 @@ export function buildMeasurementsPdf(): jsPDF {
     for (let j = i + 1; j < sorted.length; j++) {
       const a = panelGeometry(sorted[i], resolveFrame(sorted[i], frame, perPanelFrame)).outer
       const b = panelGeometry(sorted[j], resolveFrame(sorted[j], frame, perPanelFrame)).outer
-      const horizontallyAdjacent = Math.abs(a.y - b.y) < 2 && b.x >= a.x + a.w - 0.5 && b.x < a.x + a.w + 50
+      const horizontallyAdjacent = Math.abs(a.y - b.y) < EXPORT_ADJACENCY_ALIGNMENT_TOLERANCE_MM
+        && b.x >= a.x + a.w - EXPORT_ADJACENCY_START_TOLERANCE_MM
+        && b.x < a.x + a.w + EXPORT_ADJACENCY_MAX_GAP_MM
       if (horizontallyAdjacent) {
         const gap = b.x - (a.x + a.w)
-        if (gap > 0.1) {
+        if (gap > EXPORT_MIN_GAP_LABEL_MM) {
           const gx = offX + (a.x + a.w) * scale
           const gy = offY + Math.max(a.y, b.y) * scale - 3
           pdf.setDrawColor(180)
@@ -281,7 +293,7 @@ export function buildMeasurementsPdf(): jsPDF {
           pdf.line(gx, gy, gx + gap * scale, gy)
           pdf.setFontSize(6)
           pdf.setTextColor(120)
-          pdf.text(`${gap} ${u}`, gx + (gap * scale) / 2, gy - 1, { align: 'center' })
+          pdf.text(`${formatMeasurement(gap, u)} ${u}`, gx + (gap * scale) / 2, gy - 1, { align: 'center' })
         }
       }
     }
@@ -293,6 +305,13 @@ export function buildMeasurementsPdf(): jsPDF {
   pdf.setTextColor(60)
   const matCount = panels.filter((panel) => resolveFrame(panel, frame, perPanelFrame).passepartout.enabled).length
   const matNote = matCount > 0 ? `Passepartout: ${matCount} panel${matCount === 1 ? '' : 's'}` : 'No passepartout'
-  pdf.text(`Frame edge: ${frame.edgeWidth} ${u}   |   ${matNote}   |   Panels: ${panels.length}`, margin, legendY)
+  const edgeNote = sorted.length > 0
+    ? sorted.map((panel, i) => {
+      const panelUnit = panel.displayUnit ?? unit
+      return `#${i + 1} ${formatMeasurement(resolveFrame(panel, frame, perPanelFrame).edgeWidth, panelUnit)} ${panelUnit}`
+    }).join(', ')
+    : 'none'
+  const legend = `Frame edges: ${edgeNote}   |   ${matNote}   |   Panels: ${panels.length}`
+  pdf.text(pdf.splitTextToSize(legend, drawW), margin, legendY)
   return pdf
 }

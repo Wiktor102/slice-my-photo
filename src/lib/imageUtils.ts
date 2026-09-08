@@ -3,6 +3,12 @@ import type { SourceImage } from '../types'
 export const PROXY_MAX = 2048
 export const MAX_FULL_DATA_URL_MB = 8
 
+/** Check whether a full-res data URL fits the persistence budget for IndexedDB. */
+export function isPersistable(dataUrl: string): boolean {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+  return (base64.length * 3) / 4 <= MAX_FULL_DATA_URL_MB * 1024 * 1024
+}
+
 export function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)

@@ -1,5 +1,5 @@
 import type { FrameStyle, Panel, PerPanelFrame, Rect, SourceImage, Unit, WallSetup } from '../types'
-import { CM_PER_INCH, panelGeometry, rectsOverlap, resolveFrame, toCm } from './geometry'
+import { CM_PER_INCH, panelGeometry, rectsOverlap, resolveFrame } from './geometry'
 
 export type PreflightStatus = 'good' | 'warning' | 'error'
 export type PreflightDpiBand = 'good' | 'warning' | 'error'
@@ -42,7 +42,8 @@ export interface PreflightInput {
   frame: FrameStyle
   perPanelFrame: Record<string, PerPanelFrame>
   wall: WallSetup
-  unit: Unit
+  /** Kept optional for callers that also need a display preference. */
+  unit?: Unit
   sourceImage: SourceImage
   placement: ImagePlacement
 }
@@ -50,8 +51,8 @@ export interface PreflightInput {
 const EPSILON = 1e-7
 
 /**
- * Project a wall-space rectangle into source-image pixels.
- * `placement.scale` is wall units per source pixel, matching the canvas/export
+ * Project a millimeter-space rectangle into source-image pixels.
+ * `placement.scale` is millimeters per source pixel, matching the canvas/export
  * placement calculation.
  */
 export function sourceRectForWallRect(rect: Rect, placement: ImagePlacement): Rect {
@@ -113,7 +114,7 @@ export function dpiBand(dpi: number): PreflightDpiBand {
 }
 
 export function computePreflight(input: PreflightInput): PreflightReport {
-  const { panels, frame, perPanelFrame, wall, unit, sourceImage, placement } = input
+  const { panels, frame, perPanelFrame, wall, sourceImage, placement } = input
   const geoms = panels.map((panel) => panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)))
 
   const overlapIndexes = geoms.map((geom, index) => {
@@ -129,10 +130,8 @@ export function computePreflight(input: PreflightInput): PreflightReport {
     const visible = geom.visible
     const sourceRect = sourceRectForWallRect(visible, placement)
     const coverage = sourceCoverageForRect(sourceRect, sourceImage.nativeWidth, sourceImage.nativeHeight)
-    const visibleWCm = toCm(visible.w, unit)
-    const visibleHCm = toCm(visible.h, unit)
-    const dpiW = visibleWCm > 0 ? coverage.coveredWidthPx / (visibleWCm / CM_PER_INCH) : 0
-    const dpiH = visibleHCm > 0 ? coverage.coveredHeightPx / (visibleHCm / CM_PER_INCH) : 0
+    const dpiW = visible.w > 0 ? coverage.coveredWidthPx / (visible.w / (10 * CM_PER_INCH)) : 0
+    const dpiH = visible.h > 0 ? coverage.coveredHeightPx / (visible.h / (10 * CM_PER_INCH)) : 0
     const dpi = Math.max(0, Math.min(dpiW, dpiH))
     const dpiBandValue = dpiBand(dpi)
     const outsideWall: PanelPreflight['outsideWall'] = []

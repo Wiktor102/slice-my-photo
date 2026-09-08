@@ -1,6 +1,7 @@
 import type { Panel, Unit } from '../types'
 import { getPreset } from './frameSizes'
 import { defaultPassepartout } from './passepartout'
+import { toMm } from './units'
 
 export interface PresetCell {
   col: number
@@ -49,15 +50,17 @@ export function instantiatePreset(
   preset: PresetDef,
   baseSizeKey: string,
   unit: Unit,
-  gap: number,
-  edgeWidth: number,
-  wallW: number,
-  wallH: number,
+  gapMm: number,
+  edgeWidthMm: number,
+  wallWMm: number,
+  wallHMm: number,
 ): Panel[] {
   const base = getPreset(unit, baseSizeKey) ?? { w: 40, h: 60 }
-  const [bw, bh] = orient(base.w, base.h, preset.orientation)
-  const cellOuterW = bw + 2 * edgeWidth
-  const cellOuterH = bh + 2 * edgeWidth
+  const [bwDisplay, bhDisplay] = orient(base.w, base.h, preset.orientation)
+  const bw = toMm(bwDisplay, unit)
+  const bh = toMm(bhDisplay, unit)
+  const cellOuterW = bw + 2 * edgeWidthMm
+  const cellOuterH = bh + 2 * edgeWidthMm
 
   const panels: Panel[] = []
   let minX = Infinity
@@ -66,14 +69,14 @@ export function instantiatePreset(
   let maxY = -Infinity
 
   for (const cell of preset.cells) {
-    const outerW = cell.colSpan * cellOuterW + (cell.colSpan - 1) * gap
-    const outerH = cell.rowSpan * cellOuterH + (cell.rowSpan - 1) * gap
-    const outerX = cell.col * (cellOuterW + gap)
-    const outerY = cell.row * (cellOuterH + gap)
-    const innerX = outerX + edgeWidth
-    const innerY = outerY + edgeWidth
-    const innerW = outerW - 2 * edgeWidth
-    const innerH = outerH - 2 * edgeWidth
+    const outerW = cell.colSpan * cellOuterW + (cell.colSpan - 1) * gapMm
+    const outerH = cell.rowSpan * cellOuterH + (cell.rowSpan - 1) * gapMm
+    const outerX = cell.col * (cellOuterW + gapMm)
+    const outerY = cell.row * (cellOuterH + gapMm)
+    const innerX = outerX + edgeWidthMm
+    const innerY = outerY + edgeWidthMm
+    const innerW = outerW - 2 * edgeWidthMm
+    const innerH = outerH - 2 * edgeWidthMm
     const isBase = cell.colSpan === 1 && cell.rowSpan === 1
     const sizePreset = isBase ? baseSizeKey : 'custom'
     panels.push({
@@ -83,6 +86,7 @@ export function instantiatePreset(
       x: innerX,
       y: innerY,
       sizePreset,
+      displayUnit: unit,
       passepartout: defaultPassepartout({ width: innerW, height: innerH, sizePreset }),
     })
     minX = Math.min(minX, outerX)
@@ -93,7 +97,7 @@ export function instantiatePreset(
 
   const groupW = maxX - minX
   const groupH = maxY - minY
-  const offX = (wallW - groupW) / 2 - minX
-  const offY = (wallH - groupH) / 2 - minY
+  const offX = (wallWMm - groupW) / 2 - minX
+  const offY = (wallHMm - groupH) / 2 - minY
   return panels.map((p) => ({ ...p, x: p.x + offX, y: p.y + offY }))
 }
