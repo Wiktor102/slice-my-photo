@@ -7,6 +7,7 @@ import { frameHex, matHex } from '../lib/frameColors'
 import { useStore } from '../store/useStore'
 import type { SnapLines } from '../types'
 import { formatMeasurement, MIN_PANEL_SIZE_MM, PANEL_SHADOW_BLUR_MM, PANEL_SHADOW_OFFSET_Y_MM } from '../lib/units'
+import { imageCropPlacement } from '../lib/imageCrop'
 
 interface Props {
   panel: Panel
@@ -144,13 +145,9 @@ export function PanelNode({
     endHistoryGroup()
   }
 
-  // source-pixel crop for the visible region
-  const previewScaleX = image && sourceImage ? image.naturalWidth / sourceImage.nativeWidth : 1
-  const previewScaleY = image && sourceImage ? image.naturalHeight / sourceImage.nativeHeight : 1
-  const cropX = ((visible.x - panX) / scale) * previewScaleX
-  const cropY = ((visible.y - panY) / scale) * previewScaleY
-  const cropW = (visible.w / scale) * previewScaleX
-  const cropH = (visible.h / scale) * previewScaleY
+  const imageCrop = image && sourceImage
+    ? imageCropPlacement(visible, panX, panY, scale, sourceImage, image.naturalWidth, image.naturalHeight)
+    : null
   const visLocalX = visible.x - outer.x
   const visLocalY = visible.y - outer.y
 
@@ -185,14 +182,14 @@ export function PanelNode({
           <Rect x={e} y={e} width={inner.w} height={inner.h} fill={matColor} />
         )}
         <Rect x={visLocalX} y={visLocalY} width={visible.w} height={visible.h} fill="#ffffff" listening={false} />
-        {image && (
+        {image && imageCrop && (
           <KonvaImage
             image={image}
-            x={visLocalX}
-            y={visLocalY}
-            width={visible.w}
-            height={visible.h}
-            crop={{ x: cropX, y: cropY, width: cropW, height: cropH }}
+            x={imageCrop.x - outer.x}
+            y={imageCrop.y - outer.y}
+            width={imageCrop.width}
+            height={imageCrop.height}
+            crop={{ x: imageCrop.cropX, y: imageCrop.cropY, width: imageCrop.cropWidth, height: imageCrop.cropHeight }}
             listening={false}
           />
         )}
