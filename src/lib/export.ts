@@ -1,13 +1,9 @@
 import JSZip from 'jszip'
 import { jsPDF } from 'jspdf'
-import { saveAs } from 'file-saver'
+import FileSaver from 'file-saver'
 import { useStore, computeImagePlacement } from '../store/useStore'
 import { panelGeometry, resolveFrame, BASE_DPI, CM_PER_INCH } from './geometry'
 import {
-  EXPORT_ADJACENCY_ALIGNMENT_TOLERANCE_MM,
-  EXPORT_ADJACENCY_MAX_GAP_MM,
-  EXPORT_ADJACENCY_START_TOLERANCE_MM,
-  EXPORT_MIN_GAP_LABEL_MM,
   formatMeasurement,
   toMm,
 } from './units'
@@ -15,8 +11,12 @@ import { frameHex, matHex } from './frameColors'
 import { computePreflight, sourceCoverageForRect } from './preflight'
 import type { PreflightReport } from './preflight'
 import type { ExportWorkerRequest, PanelCropSpec, VisPanel, VisSpec } from './exportTypes'
+import type { Unit } from '../types'
 
 export type { PanelCropSpec } from './exportTypes'
+import { buildMeasurementPlan, type MeasurementGap, type MeasurementPlan } from './measurementPlan'
+
+const saveAs = FileSaver.saveAs ?? FileSaver
 
 export interface ExportOptions {
   format: 'jpeg' | 'png'
@@ -194,124 +194,378 @@ export async function runExport(options: ExportOptions, onProgress: (done: numbe
   saveAs(zipBlob, 'slice-my-photo-export.zip')
 }
 
-export function buildMeasurementsPdf(): jsPDF {
-  const state = useStore.getState()
-  const { panels, frame, perPanelFrame, wall, unit } = state
-  const u = unit
-  // Landscape A4. jsPDF uses millimeters for page coordinates.
-  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+function formatMeasure(valueMm: number, unit: Unit): string {
+  return formatMeasurement(valueMm, unit)
+}
+
+function formatSize(widthMm: number, heightMm: number, unit: Unit): string {
+  return `${formatMeasure(widthMm, unit)} x ${formatMeasure(heightMm, unit)} ${unit}`
+}
+
+function setDashed(pdf: jsPDF, dashed: boolean): void {
+  pdf.setLineDashPattern(dashed ? [2, 2] : [], 0)
+}
+
+function pageRect(rect: { x: number; y: number; w: number; h: number }, offX: number, offY: number, scale: number) {
+  return {
+    x: offX + rect.x * scale,
+    y: offY + rect.y * scale,
+    w: rect.w * scale,
+    h: rect.h * scale,
+  }
+}
+
+function drawDimensionLine(
+  pdf: jsPDF,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  label: string,
+  horizontal: boolean,
+): void {
+  pdf.setDrawColor(125, 125, 135)
+  pdf.setTextColor(90, 90, 100)
+  pdf.setLineWidth(0.18)
+  pdf.line(x1, y1, x2, y2)
+  if (horizontal) {
+    pdf.line(x1, y1 - 1.5, x1, y1 + 1.5)
+    pdf.line(x2, y2 - 1.5, x2, y2 + 1.5)
+    pdf.setFontSize(5.8)
+    pdf.text(label, (x1 + x2) / 2, y1 - 1.8, { align: 'center' })
+  } else {
+    pdf.line(x1 - 1.5, y1, x1 + 1.5, y1)
+    pdf.line(x2 - 1.5, y2, x2 + 1.5, y2)
+    pdf.setFontSize(5.8)
+    pdf.text(label, x1 - 2, (y1 + y2) / 2, { align: 'right', angle: 90 })
+  }
+}
+
+function drawGap(pdf: jsPDF, gap: MeasurementGap, offX: number, offY: number, scale: number, unit: Unit): void {
+  const x1 = offX + gap.line.x1 * scale
+  const y1 = offY + gap.line.y1 * scale
+  const x2 = offX + gap.line.x2 * scale
+  const y2 = offY + gap.line.y2 * scale
+  const offset = gap.orientation === 'horizontal' ? -3 : -3
+  if (gap.orientation === 'horizontal') drawDimensionLine(pdf, x1, y1 + offset, x2, y2 + offset, `${formatMeasure(gap.gap, unit)} ${unit}`, true)
+  else drawDimensionLine(pdf, x1 + offset, y1, x2 + offset, y2, `${formatMeasure(gap.gap, unit)} ${unit}`, false)
+}
+
+function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number): number {
+  const pageW = pdf.internal.pageSize.getWidth()
+  const margin = 14
+  const unit = plan.unit === 'cm' ? 'cm' : 'in'
+  const columns = [
+    { label: 'Frame', width: 18 },
+    { label: 'Outer W x H', width: 42 },
+    { label: 'Image W x H', width: 42 },
+    { label: 'Left', width: 22 },
+    { label: 'Right', width: 22 },
+    { label: 'Top', width: 22 },
+    { label: 'Bottom', width: 22 },
+    { label: 'Hang X', width: 27 },
+    { label: 'Hang Y', width: 27 },
+    { label: 'Edge', width: 20 },
+  ]
+  const tableW = columns.reduce((sum, column) => sum + column.width, 0)
+  const tableX = Math.max(margin, (pageW - tableW) / 2)
+  const rowH = 8
+  let y = startY
+  let x = tableX
+  pdf.setFillColor(35, 35, 42)
+  pdf.setDrawColor(100, 100, 110)
+  pdf.setTextColor(255, 255, 255)
+  pdf.setFontSize(6.5)
+  for (const column of columns) {
+    pdf.setFillColor(35, 35, 42)
+    pdf.setTextColor(255, 255, 255)
+    pdf.rect(x, y, column.width, rowH, 'FD')
+    pdf.text(column.label, x + column.width / 2, y + 5.2, { align: 'center' })
+    x += column.width
+  }
+
+  y += rowH
+  pdf.setFontSize(6.3)
+  plan.panels.forEach((panel, index) => {
+    x = tableX
+    const values = [
+      `#${panel.number}`,
+      formatSize(panel.outer.w, panel.outer.h, unit),
+      formatSize(panel.inner.w, panel.inner.h, unit),
+      `${formatMeasure(panel.wallDistances.left, unit)} ${unit}`,
+      `${formatMeasure(panel.wallDistances.right, unit)} ${unit}`,
+      `${formatMeasure(panel.wallDistances.top, unit)} ${unit}`,
+      `${formatMeasure(panel.wallDistances.bottom, unit)} ${unit}`,
+      `${formatMeasure(panel.hangingPoint.x, unit)} ${unit}`,
+      `${formatMeasure(panel.hangingPoint.y, unit)} ${unit}`,
+      `${formatMeasure(panel.frameEdge, unit)} ${unit}`,
+    ]
+    pdf.setFillColor(index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 250 : 242)
+    pdf.setTextColor(45, 45, 55)
+    for (let i = 0; i < columns.length; i++) {
+      const column = columns[i]
+      pdf.setFillColor(index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 250 : 242)
+      pdf.setTextColor(45, 45, 55)
+      pdf.rect(x, y, column.width, rowH, 'FD')
+      pdf.text(values[i], x + column.width / 2, y + 5.2, { align: 'center' })
+      x += column.width
+    }
+    y += rowH
+  })
+  return y
+}
+
+function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number, startIndex = 0, rowLimit = plan.gaps.length): number {
+  const unit = plan.unit === 'cm' ? 'cm' : 'in'
+  const margin = 14
+  let y = startY
+  pdf.setTextColor(40, 40, 50)
+  pdf.setFontSize(10)
+  pdf.text(`Aligned adjacent gaps${startIndex > 0 ? ' (continued)' : ''}`, margin, y)
+  y += 6
+  pdf.setFontSize(7)
+  if (plan.gaps.length === 0) {
+    pdf.setTextColor(110, 110, 120)
+    pdf.text('No aligned adjacent panel pairs found.', margin, y)
+    return y + 8
+  }
+
+  const columns = [
+    { label: 'Direction', width: 35 },
+    { label: 'Panels', width: 35 },
+    { label: `Gap (${unit})`, width: 35 },
+  ]
+  let x = margin
+  pdf.setFillColor(225, 225, 230)
+  pdf.setDrawColor(145, 145, 155)
+  pdf.setTextColor(50, 50, 60)
+  for (const column of columns) {
+    pdf.setFillColor(225, 225, 230)
+    pdf.setTextColor(50, 50, 60)
+    pdf.rect(x, y, column.width, 7, 'FD')
+    pdf.text(column.label, x + 2, y + 4.8)
+    x += column.width
+  }
+  y += 7
+  plan.gaps.slice(startIndex, startIndex + rowLimit).forEach((gap, index) => {
+    x = margin
+    const values = [gap.orientation === 'horizontal' ? 'Horizontal' : 'Vertical', `#${gap.from} to #${gap.to}`, `${formatMeasure(gap.gap, unit)} ${unit}`]
+    pdf.setFillColor(index % 2 === 0 ? 250 : 242, index % 2 === 0 ? 250 : 242, 252)
+    for (let i = 0; i < columns.length; i++) {
+      const column = columns[i]
+      pdf.setFillColor(index % 2 === 0 ? 250 : 242, index % 2 === 0 ? 250 : 242, 252)
+      pdf.setTextColor(50, 50, 60)
+      pdf.rect(x, y, column.width, 7, 'FD')
+      pdf.text(values[i], x + 2, y + 4.8)
+      x += column.width
+    }
+    y += 7
+  })
+  return y + 5
+}
+
+const SCHEDULE_TABLE_TOP = 29
+const SCHEDULE_GAP_TOP_OFFSET = 12
+const SCHEDULE_NOTE_HEIGHT = 30
+const SCHEDULE_NOTE_BOTTOM = 15
+const A4_LANDSCAPE_HEIGHT = 210
+const GAP_DETAILS_ROW_LIMIT = Math.max(1, Math.floor(
+  (A4_LANDSCAPE_HEIGHT - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT - 4 - SCHEDULE_TABLE_TOP - 18) / 7,
+))
+
+function gapTableHeight(plan: MeasurementPlan): number {
+  if (plan.gaps.length === 0) return 14
+  return 6 + 7 + plan.gaps.length * 7 + 5
+}
+
+function needsGapDetailsPage(plan: MeasurementPlan): boolean {
+  const tableBottom = SCHEDULE_TABLE_TOP + 8 + plan.panels.length * 8
+  const gapStart = tableBottom + SCHEDULE_GAP_TOP_OFFSET
+  const noteTop = A4_LANDSCAPE_HEIGHT - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT
+  return gapStart + gapTableHeight(plan) + 4 > noteTop
+}
+
+function gapDetailsPageCount(plan: MeasurementPlan): number {
+  return Math.max(1, Math.ceil(plan.gaps.length / GAP_DETAILS_ROW_LIMIT))
+}
+
+function drawInstallationNotes(pdf: jsPDF, plan: MeasurementPlan, noteTop: number): void {
   const pageW = pdf.internal.pageSize.getWidth()
   const pageH = pdf.internal.pageSize.getHeight()
-  const margin = 20
+  const margin = 14
+  const unit = plan.unit === 'cm' ? 'cm' : 'in'
+  pdf.setDrawColor(180, 180, 190)
+  pdf.setFillColor(248, 248, 250)
+  pdf.roundedRect(margin, noteTop, pageW - margin * 2, pageH - noteTop - SCHEDULE_NOTE_BOTTOM, 2, 2, 'FD')
+  pdf.setTextColor(55, 55, 66)
+  pdf.setFontSize(7.2)
+  pdf.text('Installation notes', margin + 4, noteTop + 7)
+  pdf.setTextColor(90, 90, 100)
+  pdf.setFontSize(6.8)
+  const notes = pdf.splitTextToSize(
+    `Hanging point assumption: ${plan.hangingPointAssumption} Use the Hang X / Hang Y coordinates as layout references only; do not infer a hook, cleat, wire, or bracket offset. Verify the actual hardware position against the frame and its manufacturer instructions. Outer dimensions include each panel's resolved frame edge width (${unit}).`,
+    pageW - margin * 2 - 8,
+  )
+  pdf.text(notes, margin + 4, noteTop + 12)
+}
+
+function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount: number): void {
+  const pageW = pdf.internal.pageSize.getWidth()
+  const pageH = pdf.internal.pageSize.getHeight()
+  const margin = 14
+  const unit = plan.unit === 'cm' ? 'cm' : 'in'
+  const drawTop = 27
+  const footerH = 26
   const drawW = pageW - margin * 2
-  const drawH = pageH - margin * 2 - 24 // room for legend
-  const scale = Math.min(drawW / wall.width, drawH / wall.height)
-  const offX = (pageW - wall.width * scale) / 2
-  const offY = margin + 8
+  const drawH = pageH - drawTop - footerH
+  const scale = Math.min(drawW / plan.wall.width, drawH / plan.wall.height)
+  const wallW = plan.wall.width * scale
+  const wallH = plan.wall.height * scale
+  const offX = (pageW - wallW) / 2
+  const offY = drawTop + (drawH - wallH) / 2
 
-  // title
-  pdf.setFontSize(14)
-  pdf.setTextColor(20)
-  pdf.text('Measurements Sheet', margin, margin)
-  pdf.setFontSize(9)
-  pdf.setTextColor(120)
-  pdf.text(`Wall: ${formatMeasurement(wall.width, u)} × ${formatMeasurement(wall.height, u)} ${u}`, pageW - margin, margin, { align: 'right' })
-
-  // wall
-  pdf.setDrawColor(60)
-  pdf.setFillColor(245, 245, 245)
-  pdf.rect(offX, offY, wall.width * scale, wall.height * scale, 'FD')
-
-  const sorted = [...panels].sort((a, b) => a.id.localeCompare(b.id))
-  sorted.forEach((panel, i) => {
-    const f = resolveFrame(panel, frame, perPanelFrame)
-    const g = panelGeometry(panel, f)
-    const O = (v: number) => offX + v * scale
-    const x = O(g.outer.x)
-    const y = offY + g.outer.y * scale
-    const w = g.outer.w * scale
-    const h = g.outer.h * scale
-    pdf.setDrawColor(40)
-    pdf.setFillColor(255, 255, 255)
-    pdf.setLineWidth(0.4)
-    pdf.rect(x, y, w, h, 'FD')
-    // inner (dashed)
-    pdf.setDrawColor(120)
-    pdf.setLineWidth(0.2)
-    const ix = O(g.inner.x)
-    const iy = offY + g.inner.y * scale
-    pdf.rect(ix, iy, g.inner.w * scale, g.inner.h * scale, 'D')
-    // number
-    pdf.setFontSize(13)
-    pdf.setTextColor(40)
-    pdf.text(String(i + 1), x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' })
-    // outer dim label
-    pdf.setFontSize(7)
-    pdf.setTextColor(60)
-    const panelUnit = panel.displayUnit ?? unit
-    const outerLabel = `${formatMeasurement(g.outer.w, panelUnit)} × ${formatMeasurement(g.outer.h, panelUnit)} ${panelUnit}`
-    const innerLabel = `(${formatMeasurement(g.inner.w, panelUnit)} × ${formatMeasurement(g.inner.h, panelUnit)} ${panelUnit} image area)`
-    if (w > 30 && h > 14) {
-      pdf.text(outerLabel, x + w / 2, y + h / 2 + 6, { align: 'center' })
-      pdf.setFontSize(6)
-      pdf.setTextColor(120)
-      pdf.text(innerLabel, x + w / 2, y + h / 2 + 10, { align: 'center' })
-    } else {
-      pdf.text(outerLabel, x + w / 2, y - 1.5, { align: 'center' })
-    }
-  })
-
-  // first-panel offset labels
-  if (sorted.length > 0) {
-    const first = sorted[0]
-    const fg = panelGeometry(first, resolveFrame(first, frame, perPanelFrame))
-    pdf.setDrawColor(150)
-    pdf.setLineWidth(0.15)
-    pdf.setFontSize(7)
-    pdf.setTextColor(120)
-    pdf.line(offX, offY - 4, offX + fg.outer.x * scale, offY - 4)
-    pdf.text(`${formatMeasurement(fg.outer.x, u)} ${u}`, offX + (fg.outer.x * scale) / 2, offY - 5.5, { align: 'center' })
-    pdf.line(offX - 4, offY, offX - 4, offY + fg.outer.y * scale)
-    pdf.text(`${formatMeasurement(fg.outer.y, u)} ${u}`, offX - 5, offY + (fg.outer.y * scale) / 2, { align: 'right' })
-  }
-
-  // gap labels between horizontally adjacent panels
-  for (let i = 0; i < sorted.length; i++) {
-    for (let j = i + 1; j < sorted.length; j++) {
-      const a = panelGeometry(sorted[i], resolveFrame(sorted[i], frame, perPanelFrame)).outer
-      const b = panelGeometry(sorted[j], resolveFrame(sorted[j], frame, perPanelFrame)).outer
-      const horizontallyAdjacent = Math.abs(a.y - b.y) < EXPORT_ADJACENCY_ALIGNMENT_TOLERANCE_MM
-        && b.x >= a.x + a.w - EXPORT_ADJACENCY_START_TOLERANCE_MM
-        && b.x < a.x + a.w + EXPORT_ADJACENCY_MAX_GAP_MM
-      if (horizontallyAdjacent) {
-        const gap = b.x - (a.x + a.w)
-        if (gap > EXPORT_MIN_GAP_LABEL_MM) {
-          const gx = offX + (a.x + a.w) * scale
-          const gy = offY + Math.max(a.y, b.y) * scale - 3
-          pdf.setDrawColor(180)
-          pdf.setLineWidth(0.15)
-          pdf.line(gx, gy, gx + gap * scale, gy)
-          pdf.setFontSize(6)
-          pdf.setTextColor(120)
-          pdf.text(`${formatMeasurement(gap, u)} ${u}`, gx + (gap * scale) / 2, gy - 1, { align: 'center' })
-        }
-      }
-    }
-  }
-
-  // legend
-  const legendY = pageH - margin - 6
+  pdf.setTextColor(25, 25, 32)
+  pdf.setFontSize(15)
+  pdf.text('Installation Guide', margin, 14)
+  pdf.setTextColor(100, 100, 112)
   pdf.setFontSize(8)
-  pdf.setTextColor(60)
-  const matCount = panels.filter((panel) => resolveFrame(panel, frame, perPanelFrame).passepartout.enabled).length
-  const matNote = matCount > 0 ? `Passepartout: ${matCount} panel${matCount === 1 ? '' : 's'}` : 'No passepartout'
-  const edgeNote = sorted.length > 0
-    ? sorted.map((panel, i) => {
-      const panelUnit = panel.displayUnit ?? unit
-      return `#${i + 1} ${formatMeasurement(resolveFrame(panel, frame, perPanelFrame).edgeWidth, panelUnit)} ${panelUnit}`
-    }).join(', ')
-    : 'none'
-  const legend = `Frame edges: ${edgeNote}   |   ${matNote}   |   Panels: ${panels.length}`
-  pdf.text(pdf.splitTextToSize(legend, drawW), margin, legendY)
+  pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} | origin (0, 0) is top-left`, pageW - margin, 13.5, { align: 'right' })
+  pdf.text('Frame rectangles show outer dimensions. Dashed rectangles show the inner image area.', margin, 20)
+
+  pdf.setFillColor(245, 245, 245)
+  pdf.setDrawColor(55, 55, 65)
+  pdf.setLineWidth(0.5)
+  pdf.rect(offX, offY, wallW, wallH, 'FD')
+
+  setDashed(pdf, true)
+  pdf.setDrawColor(205, 145, 55)
+  pdf.setLineWidth(0.25)
+  const centerX = offX + plan.centerlines.verticalX * scale
+  const centerY = offY + plan.centerlines.horizontalY * scale
+  pdf.line(centerX, offY, centerX, offY + wallH)
+  pdf.line(offX, centerY, offX + wallW, centerY)
+  setDashed(pdf, false)
+  pdf.setTextColor(165, 105, 35)
+  pdf.setFontSize(5.8)
+  pdf.text(`V center ${formatMeasure(plan.centerlines.verticalX, unit)} ${unit}`, centerX + 1.5, offY + 5)
+
+  for (const panel of plan.panels) {
+    const outer = pageRect(panel.outer, offX, offY, scale)
+    const inner = pageRect(panel.inner, offX, offY, scale)
+    pdf.setFillColor(255, 255, 255)
+    pdf.setDrawColor(30, 30, 38)
+    pdf.setLineWidth(0.45)
+    pdf.rect(outer.x, outer.y, outer.w, outer.h, 'FD')
+    setDashed(pdf, true)
+    pdf.setDrawColor(125, 125, 135)
+    pdf.setLineWidth(0.2)
+    pdf.rect(inner.x, inner.y, inner.w, inner.h, 'D')
+    setDashed(pdf, false)
+
+    pdf.setTextColor(35, 35, 45)
+    pdf.setFontSize(Math.max(7, Math.min(13, outer.w / 4)))
+    pdf.text(`#${panel.number}`, outer.x + outer.w / 2, outer.y + outer.h / 2, { align: 'center', baseline: 'middle' })
+
+    const sizeLabel = formatSize(panel.outer.w, panel.outer.h, unit)
+    pdf.setFontSize(6.2)
+    pdf.setTextColor(55, 55, 65)
+    const labelY = outer.y - 2 >= drawTop ? outer.y - 2 : outer.y + outer.h + 4
+    pdf.text(sizeLabel, outer.x + outer.w / 2, labelY, { align: 'center' })
+
+    const hangingX = offX + panel.hangingPoint.x * scale
+    const hangingY = offY + panel.hangingPoint.y * scale
+    pdf.setFillColor(53, 110, 196)
+    pdf.setDrawColor(255, 255, 255)
+    pdf.setLineWidth(0.25)
+    pdf.circle(hangingX, hangingY, 1.4, 'FD')
+    pdf.setTextColor(35, 80, 150)
+    pdf.setFontSize(5.8)
+    pdf.text(`H${panel.number}`, hangingX + 2, Math.min(offY + wallH - 2, hangingY + 4))
+  }
+
+  for (const gap of plan.gaps) drawGap(pdf, gap, offX, offY, scale, unit)
+
+  const footerY = pageH - footerH + 2
+  pdf.setDrawColor(190, 190, 198)
+  pdf.setLineWidth(0.2)
+  pdf.line(margin, footerY - 4, pageW - margin, footerY - 4)
+  pdf.setTextColor(70, 70, 80)
+  pdf.setFontSize(7)
+  pdf.text('H1/H2... = hanging point at the outer-frame top center. Coordinates and edge distances are on page 2.', margin, footerY + 2)
+  pdf.text('Hanging-point assumption: no hardware offset is included. Confirm the actual hanger position from the frame or hardware manufacturer before drilling.', margin, footerY + 8)
+  pdf.setTextColor(120, 120, 130)
+  pdf.text(`Centerlines: vertical X ${formatMeasure(plan.centerlines.verticalX, unit)} ${unit} | horizontal Y ${formatMeasure(plan.centerlines.horizontalY, unit)} ${unit}`, margin, footerY + 14)
+  pdf.text(`Page 1 of ${pageCount}`, pageW - margin, footerY + 14, { align: 'right' })
+}
+
+function drawSchedulePage(pdf: jsPDF, plan: MeasurementPlan, pageCount: number): void {
+  const pageW = pdf.internal.pageSize.getWidth()
+  const pageH = pdf.internal.pageSize.getHeight()
+  const margin = 14
+  const unit = plan.unit === 'cm' ? 'cm' : 'in'
+  pdf.addPage('a4', 'landscape')
+  pdf.setTextColor(25, 25, 32)
+  pdf.setFontSize(15)
+  pdf.text('Installation Schedule', margin, 14)
+  pdf.setTextColor(100, 100, 112)
+  pdf.setFontSize(8)
+  pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} | ${plan.panels.length} frame${plan.panels.length === 1 ? '' : 's'}`, pageW - margin, 13.5, { align: 'right' })
+  pdf.text('All distances are measured from the wall origin at the top-left. "Hang" is the assumed outer-frame top-center point.', margin, 20)
+
+  const tableBottom = drawMeasurementTable(pdf, plan, SCHEDULE_TABLE_TOP)
+  const noteTop = pageH - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT
+  const hasGapDetailsPage = needsGapDetailsPage(plan)
+  if (hasGapDetailsPage) {
+    pdf.setTextColor(90, 90, 100)
+    pdf.setFontSize(7)
+    pdf.text('Aligned adjacent gaps and installation notes continue on the next page.', margin, tableBottom + SCHEDULE_GAP_TOP_OFFSET)
+  } else {
+    drawGapTable(pdf, plan, tableBottom + SCHEDULE_GAP_TOP_OFFSET)
+    drawInstallationNotes(pdf, plan, noteTop)
+  }
+  pdf.setTextColor(120, 120, 130)
+  pdf.setFontSize(7)
+  pdf.text(`Page 2 of ${pageCount}`, pageW - margin, pageH - 7, { align: 'right' })
+
+  if (hasGapDetailsPage) {
+    const detailsPages = gapDetailsPageCount(plan)
+    for (let pageIndex = 0; pageIndex < detailsPages; pageIndex++) {
+      pdf.addPage('a4', 'landscape')
+      pdf.setTextColor(25, 25, 32)
+      pdf.setFontSize(15)
+      pdf.text('Installation details', margin, 14)
+      pdf.setTextColor(100, 100, 112)
+      pdf.setFontSize(8)
+      pdf.text(
+        pageIndex === detailsPages - 1 ? 'Aligned adjacent gaps and installation notes' : 'Aligned adjacent gaps (continued)',
+        pageW - margin,
+        13.5,
+        { align: 'right' },
+      )
+      pdf.text('Gap dimensions are measured between the resolved outer frame edges.', margin, 20)
+
+      drawGapTable(pdf, plan, SCHEDULE_TABLE_TOP, pageIndex * GAP_DETAILS_ROW_LIMIT, GAP_DETAILS_ROW_LIMIT)
+      if (pageIndex === detailsPages - 1) drawInstallationNotes(pdf, plan, noteTop)
+      pdf.setTextColor(120, 120, 130)
+      pdf.setFontSize(7)
+      pdf.text(`Page ${pageIndex + 3} of ${pageCount}`, pageW - margin, pageH - 7, { align: 'right' })
+    }
+  }
+}
+
+export function buildMeasurementsPdf(plan?: MeasurementPlan): jsPDF {
+  const state = useStore.getState()
+  const measurementPlan = plan ?? buildMeasurementPlan({
+    wall: state.wall,
+    panels: state.panels,
+    frame: state.frame,
+    perPanelFrame: state.perPanelFrame,
+    unit: state.unit,
+  })
+  const detailsPages = needsGapDetailsPage(measurementPlan) ? gapDetailsPageCount(measurementPlan) : 0
+  const pageCount = 2 + detailsPages
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  drawInstallationGuidePage(pdf, measurementPlan, pageCount)
+  drawSchedulePage(pdf, measurementPlan, pageCount)
   return pdf
 }
