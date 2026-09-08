@@ -163,12 +163,42 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   // space-to-pan viewport
   useEffect(() => {
-    if (isPreview) return
-    const down = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = true; setSpaceHeld(true) } }
-    const up = (e: KeyboardEvent) => { if (e.code === 'Space') { spaceRef.current = false; setSpaceHeld(false) } }
+    const clearSpace = () => {
+      spaceRef.current = false
+      setSpaceHeld(false)
+    }
+
+    if (isPreview) {
+      clearSpace()
+      return
+    }
+
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      if (target.isContentEditable) return true
+      const tag = target.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    }
+    const down = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isEditableTarget(e.target)) {
+        spaceRef.current = true
+        setSpaceHeld(true)
+      }
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'Space') clearSpace()
+    }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
+    window.addEventListener('blur', clearSpace)
+    document.addEventListener('visibilitychange', clearSpace)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', clearSpace)
+      document.removeEventListener('visibilitychange', clearSpace)
+      clearSpace()
+    }
   }, [isPreview])
 
   // wheel zoom (non-passive)
