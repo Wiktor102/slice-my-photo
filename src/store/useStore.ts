@@ -803,6 +803,12 @@ export const useStore = create<State>()(
       },
 
       restorePortableProject: (project) => {
+        // A source image is intentionally outside project history. Treat an
+        // imported project as a new history root so undo cannot pair the new
+        // image with layout snapshots created for the previous image.
+        historyPast.length = 0
+        historyFuture.length = 0
+        historyGroup = null
         const panels = project.state.panels.map((panel) => ({
           ...panel,
           passepartout: normalizePassepartout(panel, project.state.frame),
@@ -810,11 +816,13 @@ export const useStore = create<State>()(
         const perPanelFrame = Object.fromEntries(
           Object.entries(project.state.perPanelFrame).map(([id, perPanel]) => {
             const panel = panels.find((candidate) => candidate.id === id)
-            return [id, panel ? { ...perPanel, passepartout: normalizePassepartout(panel, perPanel) } : { ...perPanel }]
+            if (!panel) return [id, { ...perPanel, passepartout: { ...perPanel.passepartout } }]
+            const overridePanel = { ...panel, passepartout: { ...perPanel.passepartout } }
+            return [id, { ...perPanel, passepartout: normalizePassepartout(overridePanel, perPanel) }]
           }),
         )
         const previous = get()
-        set({
+        rawSet({
           screen: 'editor',
           sourceImage: { ...project.sourceImage },
           imageLoading: false,
@@ -843,6 +851,8 @@ export const useStore = create<State>()(
           toast: null,
           zoomToFitToken: previous.zoomToFitToken + 1,
           zoomToImageToken: previous.zoomToImageToken,
+          canUndo: false,
+          canRedo: false,
         })
       },
 

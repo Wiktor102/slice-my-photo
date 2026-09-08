@@ -18,9 +18,10 @@ export interface PanelGeometry {
 export function resolveFrame(panel: Panel, global: FrameStyle, perPanel: Record<string, PerPanelFrame>): PerPanelFrame {
   const override = global.perPanel ? perPanel[panel.id] : undefined
   if (override) {
+    const overridePanel = { ...panel, passepartout: { ...override.passepartout } }
     return {
       ...override,
-      passepartout: normalizePassepartout(panel, override),
+      passepartout: normalizePassepartout(overridePanel, override),
     }
   }
   const pp = normalizePassepartout(panel, global)
