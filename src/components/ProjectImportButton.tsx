@@ -99,8 +99,11 @@ export function ProjectImportButton({ className = 'ghost', title = 'Open a .smp 
           body={<>Importing <strong>{pendingImport.sourceImage.name}</strong> will replace the current image and arrangement ({pendingImport.state.panels.length} panel{pendingImport.state.panels.length === 1 ? '' : 's'}). Continue?</>}
           confirmLabel={busy ? 'Importing…' : 'Import project'}
           cancelLabel="Cancel"
+          disabled={busy}
           onConfirm={() => void confirmImport()}
-          onCancel={() => setPendingImport(null)}
+          onCancel={() => {
+            if (!busy) setPendingImport(null)
+          }}
         />
       )}
       {error && (

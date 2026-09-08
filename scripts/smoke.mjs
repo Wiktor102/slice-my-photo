@@ -145,7 +145,7 @@ try {
     await page.waitForTimeout(200)
   })
   await step('open export modal', async () => {
-    await page.click('button:has-text("Export")')
+    await page.getByRole('button', { name: /^Export$/ }).click()
     await page.waitForSelector('.modal', { timeout: 5000 })
   })
   await step('download zip', async () => {

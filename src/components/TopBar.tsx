@@ -62,6 +62,7 @@ export function TopBar() {
       const state = useStore.getState()
       const blob = await serializePortableProject({
         state: {
+          measurementVersion: state.measurementVersion,
           unit: state.unit,
           wall: { ...state.wall },
           panels: state.panels.map((panel) => ({ ...panel, passepartout: panel.passepartout ? { ...panel.passepartout } : undefined })),
@@ -71,6 +72,8 @@ export function TopBar() {
           currentSizeKey: state.currentSizeKey,
           presetActive: state.presetActive,
           image: { ...state.image },
+          showGrid: state.showGrid,
+          gapSnapEnabled: state.gapSnapEnabled,
         },
         sourceImage: { ...sourceImage },
       })
