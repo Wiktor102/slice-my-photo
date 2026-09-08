@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeftIcon, ImageIcon } from 'lucide-react'
 import type { DesignVariant } from '../types'
 import { loadImage } from '../lib/imageUtils'
+import { formatMeasurement } from '../lib/units'
 import { useStore } from '../store/useStore'
 import { VariantCanvas } from './VariantCanvas'
 
@@ -58,7 +59,7 @@ export function CompareOverlay({ variants, onBack }: Props) {
               <span className="compare-number">0{index + 1}</span>
               <div>
                 <h3>{variant.name}</h3>
-                <span>{variant.wall.width} × {variant.wall.height} {variant.unit} wall · {variant.panels.length} panels</span>
+                <span>{formatMeasurement(variant.wall.width, variant.unit)} × {formatMeasurement(variant.wall.height, variant.unit)} {variant.unit} wall · {variant.panels.length} panels</span>
               </div>
             </div>
             <VariantCanvas variant={variant} sourceImage={sourceImage} imageEl={readyImage} />

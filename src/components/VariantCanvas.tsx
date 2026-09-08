@@ -4,6 +4,8 @@ import type { DesignVariant, SourceImage } from '../types'
 import { frameHex, matHex } from '../lib/frameColors'
 import { panelGeometry, resolveFrame } from '../lib/geometry'
 import { computeImagePlacement } from '../store/useStore'
+import { imageCropPlacement } from '../lib/imageCrop'
+import { PANEL_SHADOW_BLUR_MM, PANEL_SHADOW_OFFSET_Y_MM } from '../lib/units'
 
 interface Props {
   variant: DesignVariant
@@ -43,7 +45,10 @@ export function VariantCanvas({ variant, sourceImage, imageEl }: Props) {
     variant.image,
     sourceImage,
   )
-  const wallScale = Math.max(0.05, Math.min((size.w - 28) / variant.wall.width, (size.h - 28) / variant.wall.height))
+  const wallScale = Math.min(
+    Math.max(1, size.w - 28) / variant.wall.width,
+    Math.max(1, size.h - 28) / variant.wall.height,
+  )
   const wallX = (size.w - variant.wall.width * wallScale) / 2
   const wallY = (size.h - variant.wall.height * wallScale) / 2
 
@@ -57,10 +62,6 @@ export function VariantCanvas({ variant, sourceImage, imageEl }: Props) {
               width={variant.wall.width}
               height={variant.wall.height}
               fill={variant.wall.color}
-              shadowColor="#000000"
-              shadowBlur={16 / wallScale}
-              shadowOffset={{ x: 0, y: 5 / wallScale }}
-              shadowOpacity={0.3}
             />
             {variant.panels.map((panel) => {
               const panelFrame = resolveFrame(panel, variant.frame, variant.perPanelFrame)
@@ -69,10 +70,17 @@ export function VariantCanvas({ variant, sourceImage, imageEl }: Props) {
               const edge = panelFrame.edgeWidth
               const visibleX = geom.visible.x - geom.outer.x
               const visibleY = geom.visible.y - geom.outer.y
-              const cropX = ((geom.visible.x - placement.panX) / placement.scale) * (imageEl ? imageEl.naturalWidth / sourceImage.nativeWidth : 1)
-              const cropY = ((geom.visible.y - placement.panY) / placement.scale) * (imageEl ? imageEl.naturalHeight / sourceImage.nativeHeight : 1)
-              const cropW = (geom.visible.w / placement.scale) * (imageEl ? imageEl.naturalWidth / sourceImage.nativeWidth : 1)
-              const cropH = (geom.visible.h / placement.scale) * (imageEl ? imageEl.naturalHeight / sourceImage.nativeHeight : 1)
+              const imageCrop = imageEl
+                ? imageCropPlacement(
+                  geom.visible,
+                  placement.panX,
+                  placement.panY,
+                  placement.scale,
+                  sourceImage,
+                  imageEl.naturalWidth,
+                  imageEl.naturalHeight,
+                )
+                : null
               return (
                 <Group key={panel.id} x={geom.outer.x} y={geom.outer.y}>
                   <Rect
@@ -80,9 +88,9 @@ export function VariantCanvas({ variant, sourceImage, imageEl }: Props) {
                     height={geom.outer.h}
                     fill={frameHex(panelFrame.colorKey, panelFrame.customColor)}
                     shadowColor="#000000"
-                    shadowBlur={panelFrame.shadow ? 8 / wallScale : 0}
-                    shadowOffset={{ x: 0, y: panelFrame.shadow ? 3 / wallScale : 0 }}
-                    shadowOpacity={panelFrame.shadow ? 0.34 : 0}
+                    shadowBlur={panelFrame.shadow ? PANEL_SHADOW_BLUR_MM : 0}
+                    shadowOffset={{ x: 0, y: panelFrame.shadow ? PANEL_SHADOW_OFFSET_Y_MM : 0 }}
+                    shadowOpacity={panelFrame.shadow ? 0.35 : 0}
                   />
                   {mat.enabled && (
                     <Rect
@@ -100,14 +108,14 @@ export function VariantCanvas({ variant, sourceImage, imageEl }: Props) {
                     height={geom.visible.h}
                     fill="#ffffff"
                   />
-                  {imageEl && (
+                  {imageEl && imageCrop && (
                     <KonvaImage
                       image={imageEl}
-                      x={visibleX}
-                      y={visibleY}
-                      width={geom.visible.w}
-                      height={geom.visible.h}
-                      crop={{ x: cropX, y: cropY, width: cropW, height: cropH }}
+                      x={imageCrop.x - geom.outer.x}
+                      y={imageCrop.y - geom.outer.y}
+                      width={imageCrop.width}
+                      height={imageCrop.height}
+                      crop={{ x: imageCrop.cropX, y: imageCrop.cropY, width: imageCrop.cropWidth, height: imageCrop.cropHeight }}
                     />
                   )}
                 </Group>

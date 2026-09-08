@@ -9,6 +9,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
+function isModalOpen(): boolean {
+  return typeof document !== 'undefined' && Boolean(document.querySelector('.modal-overlay, .compare-overlay'))
+}
+
 export function TopBar({ onOpenVariants }: { onOpenVariants: () => void }) {
   const setConfirmReset = useStore((s) => s.setConfirmReset)
   const setPreview = useStore((s) => s.setPreview)
@@ -19,6 +23,7 @@ export function TopBar({ onOpenVariants }: { onOpenVariants: () => void }) {
   const loadImageFromFile = useStore((s) => s.loadImageFromFile)
   const preview = useStore((s) => s.preview)
   const imageWarning = useStore((s) => s.imageWarning)
+  const sourceImage = useStore((s) => s.sourceImage)
   const panels = useStore((s) => s.panels)
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
@@ -29,7 +34,7 @@ export function TopBar({ onOpenVariants }: { onOpenVariants: () => void }) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || isEditableTarget(event.target)) return
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || isEditableTarget(event.target) || isModalOpen()) return
       const key = event.key.toLowerCase()
       if (key === 'z') {
         event.preventDefault()
@@ -89,7 +94,14 @@ export function TopBar({ onOpenVariants }: { onOpenVariants: () => void }) {
       >
         <Redo2Icon size={14} />Redo
       </button>
-      <button className="ghost" onClick={onOpenVariants}><Columns2Icon size={14} />Compare</button>
+      <button
+        className="ghost"
+        disabled={!sourceImage}
+        title={sourceImage ? undefined : 'Upload an image before comparing variants.'}
+        onClick={onOpenVariants}
+      >
+        <Columns2Icon size={14} />Compare
+      </button>
       <div className="spacer" />
       <button onClick={() => setConfirmReset(true)}><RotateCcwIcon size={14} />Reset</button>
       <button className={preview ? 'primary' : ''} onClick={() => setPreview(!preview)}>

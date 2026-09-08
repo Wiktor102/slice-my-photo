@@ -5,6 +5,7 @@ import { deleteVariant, getAllVariants, getVariantByName, makeVariantId, MAX_VAR
 import { useStore } from '../store/useStore'
 import { CompareOverlay } from './CompareOverlay'
 import { ConfirmDialog } from './ConfirmDialog'
+import { formatMeasurement } from '../lib/units'
 
 interface Props {
   onClose: () => void
@@ -45,6 +46,7 @@ export function VariantModal({ onClose }: Props) {
   const gap = useStore((state) => state.gap)
   const currentSizeKey = useStore((state) => state.currentSizeKey)
   const presetActive = useStore((state) => state.presetActive)
+  const requestZoomToFit = useStore((state) => state.requestZoomToFit)
 
   const currentSnapshot = useMemo(() => ({
     unit,
@@ -63,7 +65,7 @@ export function VariantModal({ onClose }: Props) {
     [sourceImage],
   )
   const [, setVariantsRevision] = useState(0)
-  const variants = getAllVariants(activeSourceSignature)
+  const variants = activeSourceSignature ? getAllVariants(activeSourceSignature) : []
   const [name, setName] = useState(`Variant ${Math.min(variants.length + 1, MAX_VARIANTS)}`)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -74,10 +76,9 @@ export function VariantModal({ onClose }: Props) {
   const [compareOpen, setCompareOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const selectedVariants = useMemo(
-    () => selectedIds.map((id) => variants.find((variant) => variant.id === id)).filter((variant): variant is DesignVariant => Boolean(variant)),
-    [selectedIds, variants],
-  )
+  const selectedVariants = selectedIds
+    .map((id) => variants.find((variant) => variant.id === id))
+    .filter((variant): variant is DesignVariant => Boolean(variant))
 
   const refresh = () => setVariantsRevision((revision) => revision + 1)
 
@@ -101,6 +102,10 @@ export function VariantModal({ onClose }: Props) {
   }, [compareOpen, editingId, onClose, overwriteTarget, pendingApply])
 
   const saveCurrent = (variantId: string, variantName: string) => {
+    if (!activeSourceSignature) {
+      setError('Upload an image before saving a variant.')
+      return
+    }
     const variant: DesignVariant = {
       ...cloneSnapshotFromState(currentSnapshot),
       id: variantId,
@@ -121,6 +126,10 @@ export function VariantModal({ onClose }: Props) {
   }
 
   const handleSave = () => {
+    if (!activeSourceSignature) {
+      setError('Upload an image before saving a variant.')
+      return
+    }
     const trimmed = name.trim()
     if (!trimmed) {
       setError('Give this variant a name.')
@@ -136,30 +145,43 @@ export function VariantModal({ onClose }: Props) {
 
   const handleRenameCommit = (id: string) => {
     const trimmed = editText.trim()
-    if (trimmed) {
-      const duplicate = variants.some((variant) => variant.id !== id && variant.name === trimmed)
-      if (duplicate) {
-        setError('That name is already in use.')
-      } else {
-        renameVariant(id, trimmed)
-        refresh()
-        setError(null)
-      }
+    if (!trimmed) {
+      setError('Give this variant a name.')
+      return
     }
+    const duplicate = variants.some((variant) => variant.id !== id && variant.name === trimmed)
+    if (duplicate) {
+      setError('That name is already in use.')
+      return
+    }
+    if (!renameVariant(id, trimmed)) {
+      setError('Could not rename this variant. Browser storage may be unavailable.')
+      return
+    }
+    refresh()
+    setError(null)
     setEditingId(null)
   }
 
   const handleDelete = (id: string) => {
-    deleteVariant(id)
+    if (!deleteVariant(id)) {
+      setError('Could not delete this variant. Browser storage may be unavailable.')
+      return
+    }
     setDeleteConfirmId(null)
     setSelectedIds((ids) => ids.filter((selectedId) => selectedId !== id))
     refresh()
   }
 
   const handleApply = (variant: DesignVariant) => {
+    if (!activeSourceSignature || variant.sourceSignature !== activeSourceSignature) {
+      setError('This variant belongs to a different source image.')
+      return
+    }
     if (panels.length > 0) setPendingApply(variant)
     else {
       loadVariant(variant)
+      requestZoomToFit()
       showToast(`Applied “${variant.name}”.`)
       onClose()
     }
@@ -168,6 +190,7 @@ export function VariantModal({ onClose }: Props) {
   const confirmApply = () => {
     if (!pendingApply) return
     loadVariant(pendingApply)
+    requestZoomToFit()
     showToast(`Applied “${pendingApply.name}”.`)
     setPendingApply(null)
     onClose()
@@ -206,7 +229,11 @@ export function VariantModal({ onClose }: Props) {
                 aria-label="Variant name"
               />
             </label>
-            <button className="primary" onClick={handleSave} disabled={variants.length >= MAX_VARIANTS && !getVariantByName(name.trim(), activeSourceSignature)}>
+            <button
+              className="primary"
+              onClick={handleSave}
+              disabled={!activeSourceSignature || (variants.length >= MAX_VARIANTS && !getVariantByName(name.trim(), activeSourceSignature))}
+            >
               <PlusIcon size={14} />Save variant
             </button>
           </div>
@@ -261,7 +288,7 @@ export function VariantModal({ onClose }: Props) {
                       ) : (
                         <span className="variant-row-name">{variant.name}</span>
                       )}
-                      <span className="variant-row-meta">{variant.panels.length} panels · {variant.wall.width} × {variant.wall.height} {variant.unit}</span>
+                      <span className="variant-row-meta">{variant.panels.length} panels · {formatMeasurement(variant.wall.width, variant.unit)} × {formatMeasurement(variant.wall.height, variant.unit)} {variant.unit}</span>
                     </div>
                     <div className="variant-row-actions">
                       <button className="ghost variant-action" title="Rename variant" aria-label={`Rename ${variant.name}`} onClick={() => { setEditingId(variant.id); setEditText(variant.name) }}>

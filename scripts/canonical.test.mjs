@@ -37,6 +37,12 @@ try {
   const { FRAME_SIZES, findPreset } = await server.ssrLoadModule('/src/lib/frameSizes.ts')
   const { PRESETS, instantiatePreset } = await server.ssrLoadModule('/src/lib/presets.ts')
   const { normalizePersistedState, useStore } = await server.ssrLoadModule('/src/store/useStore.ts')
+  const { imageCropPlacement } = await server.ssrLoadModule('/src/lib/imageCrop.ts')
+  const {
+    getAllVariants,
+    VARIANT_STORAGE_KEY,
+    VARIANT_STORAGE_VERSION,
+  } = await server.ssrLoadModule('/src/lib/variants.ts')
 
   assert.equal(toMm(1, 'cm'), 10)
   assert.equal(toMm(1, 'in'), 25.4)
@@ -154,6 +160,86 @@ try {
   assert.equal(inchPanels[0].displayUnit, 'in')
   assert.equal(findPreset('in', inchPanels[0].width, inchPanels[0].height), 'in-16x20')
   assert.ok(FRAME_SIZES.cm.length > 0 && FRAME_SIZES.in.length > 0)
+
+  const partialFit = imageCropPlacement(
+    { x: 0, y: 0, w: 100, h: 100 },
+    -25,
+    25,
+    1,
+    { nativeWidth: 100, nativeHeight: 100 },
+    100,
+    100,
+  )
+  assert.deepEqual(partialFit, {
+    x: 0,
+    y: 25,
+    width: 75,
+    height: 75,
+    cropX: 25,
+    cropY: 0,
+    cropWidth: 75,
+    cropHeight: 75,
+  })
+  assert.equal(imageCropPlacement({ x: 0, y: 0, w: 10, h: 10 }, 20, 20, 1, { nativeWidth: 100, nativeHeight: 100 }, 100, 100), null)
+
+  const legacyVariant = {
+    id: 'legacy-variant',
+    name: 'Legacy',
+    savedAt: 1,
+    sourceSignature: 'source-a',
+    unit: 'cm',
+    wall: { width: 300, height: 250, color: '#fff' },
+    panels: [{
+      id: 'legacy-panel',
+      width: 40,
+      height: 60,
+      x: 10,
+      y: 10,
+      sizePreset: 'cm-40x60',
+      passepartout: {
+        enabled: true,
+        mode: 'opening',
+        inset: 2,
+        openingWidth: 36,
+        openingHeight: 56,
+        marginTop: 2,
+        marginRight: 2,
+        marginBottom: 2,
+        marginLeft: 2,
+        colorKey: 'white',
+        customColor: '#fff',
+      },
+    }],
+    frame: {
+      edgeWidth: 2,
+      colorKey: 'black',
+      customColor: '#000',
+      matEnabled: false,
+      matWidth: 3,
+      matColorKey: 'white',
+      matCustomColor: '#fff',
+      shadow: true,
+      perPanel: false,
+    },
+    perPanelFrame: {},
+    image: { mode: 'fit', zoom: 1, panX: 0, panY: 0 },
+    gap: 3,
+    currentSizeKey: 'cm-40x60',
+    presetActive: null,
+  }
+  localStorage.setItem(VARIANT_STORAGE_KEY, JSON.stringify({ version: 2, variants: [legacyVariant] }))
+  const migratedVariants = getAllVariants('source-a')
+  assert.equal(VARIANT_STORAGE_VERSION, 3)
+  assert.equal(migratedVariants.length, 1)
+  assert.equal(migratedVariants[0].wall.width, 3000)
+  assert.equal(migratedVariants[0].panels[0].width, 400)
+  assert.equal(migratedVariants[0].panels[0].passepartout.openingWidth, 360)
+
+  localStorage.setItem(VARIANT_STORAGE_KEY, JSON.stringify({
+    version: VARIANT_STORAGE_VERSION,
+    variants: [{ ...migratedVariants[0], panels: [{ ...migratedVariants[0].panels[0], id: 'duplicate' }, { ...migratedVariants[0].panels[0], id: 'duplicate' }] }],
+  }))
+  assert.equal(getAllVariants('source-a').length, 0)
 
   const initialViewport = { x: 123.45, y: 67.89, scale: 0.25 }
   useStore.getState().resetProject()

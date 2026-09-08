@@ -803,17 +803,22 @@ export const useStore = create<State>()(
       },
 
       loadVariant: (variant) => {
+        const nextFrame = { ...variant.frame }
+        const nextPerPanelFrame = Object.fromEntries(
+          Object.entries(variant.perPanelFrame).map(([id, panelFrame]) => [id, {
+            ...panelFrame,
+            passepartout: { ...panelFrame.passepartout },
+          }]),
+        )
+        const nextPanels = variant.panels
+          .map((panel) => ({ ...panel, passepartout: normalizePassepartout(panel, nextFrame) }))
         set({
+          measurementVersion: CANONICAL_MEASUREMENT_VERSION,
           unit: variant.unit,
           wall: { ...variant.wall },
-          panels: variant.panels.map((p) => ({ ...p, passepartout: normalizePassepartout(p, variant.frame) })),
-          frame: { ...variant.frame },
-          perPanelFrame: Object.fromEntries(
-            Object.entries(variant.perPanelFrame).map(([id, panelFrame]) => [id, {
-              ...panelFrame,
-              passepartout: { ...panelFrame.passepartout },
-            }]),
-          ),
+          panels: clampPanelsToWall(nextPanels, nextFrame, nextPerPanelFrame, variant.wall),
+          frame: nextFrame,
+          perPanelFrame: nextPerPanelFrame,
           image: { ...variant.image },
           gap: variant.gap,
           currentSizeKey: variant.currentSizeKey,

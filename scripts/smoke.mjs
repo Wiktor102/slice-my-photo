@@ -117,6 +117,13 @@ try {
     if (n < 3) throw new Error('expected >=3 panels, got ' + n)
     console.log('   panels:', n)
   })
+  await step('fit image into openings', async () => {
+    const positioning = page.locator('.card', { hasText: 'Image Positioning' })
+    await positioning.getByRole('button', { name: 'Fit', exact: true }).click()
+    if (!(await positioning.getByRole('button', { name: 'Fit', exact: true }).evaluate((button) => button.classList.contains('primary')))) {
+      throw new Error('fit mode did not activate')
+    }
+  })
   await step('save and compare variants', async () => {
     await page.getByRole('button', { name: 'Compare', exact: true }).click()
     await page.waitForSelector('.variant-modal')
@@ -125,13 +132,21 @@ try {
       await name.fill(label)
       await page.getByRole('button', { name: 'Save variant', exact: true }).click()
     }
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('slice-my-photo-variants') || 'null'))
+    if (stored?.version !== 3 || stored.variants?.length !== 3) throw new Error('variant storage was not persisted in the current schema')
     const checks = page.locator('.variant-check input')
     await checks.nth(0).check()
     await checks.nth(1).check()
     await page.getByRole('button', { name: 'Compare selected', exact: true }).click()
     await page.waitForSelector('.compare-overlay')
     if (await page.locator('.compare-cell').count() !== 2) throw new Error('expected two comparison cells')
+    const panelsWhileComparing = await page.locator('.panel-row').count()
+    await page.keyboard.press('Control+Z')
+    await page.keyboard.press('Control+Y')
+    if (await page.locator('.panel-row').count() !== panelsWhileComparing) throw new Error('compare shortcuts changed the editor')
     await page.getByRole('button', { name: 'Back to variants', exact: true }).click()
+    await page.keyboard.press('Control+Z')
+    if (await page.locator('.panel-row').count() !== panelsWhileComparing) throw new Error('variant modal shortcut changed the editor')
     await page.getByRole('button', { name: 'Close variants', exact: true }).click()
   })
   await step('undo and redo layout change', async () => {
@@ -139,14 +154,18 @@ try {
     const redo = page.getByRole('button', { name: /^Redo/ })
     if (await undo.isDisabled()) throw new Error('undo should be enabled after changing the layout')
     await undo.click()
-    if (await page.locator('.panel-row').count() !== 0) throw new Error('undo did not remove the preset panels')
+    if (await page.locator('.panel-row').count() < 3) throw new Error('undo removed the preset before undoing the image mode change')
     if (await redo.isDisabled()) throw new Error('redo should be enabled after undo')
+    await undo.click()
+    if (await page.locator('.panel-row').count() !== 0) throw new Error('undo did not remove the preset panels')
     await page.keyboard.press('Control+Shift+Z')
     if (await page.locator('.panel-row').count() < 3) throw new Error('redo shortcut did not restore the preset')
+    await page.keyboard.press('Control+Shift+Z')
+    if (await page.locator('.panel-row').count() < 3) throw new Error('redo shortcut did not restore the image mode change')
     await page.keyboard.press('Control+Z')
-    if (await page.locator('.panel-row').count() !== 0) throw new Error('undo shortcut did not remove the preset')
+    if (await page.locator('.panel-row').count() < 3) throw new Error('undo shortcut removed the preset with the image mode change')
     await redo.click()
-    if (await page.locator('.panel-row').count() < 3) throw new Error('redo button did not restore the preset')
+    if (await page.locator('.panel-row').count() < 3) throw new Error('redo button did not restore the image mode change')
   })
   await step('select a panel', async () => {
     await page.locator('.panel-row').first().click()
@@ -191,12 +210,49 @@ try {
   })
 
   await step('reload resumes session', async () => {
+    await page.evaluate(() => {
+      const key = 'slice-my-photo-variants'
+      const stored = JSON.parse(localStorage.getItem(key) || 'null')
+      const variants = stored?.variants
+      if (!Array.isArray(variants) || variants.length === 0) throw new Error('missing variants for migration check')
+      const scalePassepartout = (settings) => {
+        if (!settings) return
+        for (const field of ['inset', 'openingWidth', 'openingHeight', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft']) settings[field] /= 10
+      }
+      variants.forEach((variant) => {
+        variant.wall.width /= 10
+        variant.wall.height /= 10
+        variant.panels.forEach((panel) => {
+          panel.width /= 10
+          panel.height /= 10
+          panel.x /= 10
+          panel.y /= 10
+          scalePassepartout(panel.passepartout)
+        })
+        variant.frame.edgeWidth /= 10
+        variant.frame.matWidth /= 10
+        Object.values(variant.perPanelFrame).forEach((panelFrame) => {
+          panelFrame.edgeWidth /= 10
+          scalePassepartout(panelFrame.passepartout)
+        })
+        variant.image.panX /= 10
+        variant.image.panY /= 10
+        variant.gap /= 10
+      })
+      stored.version = 2
+      localStorage.setItem(key, JSON.stringify(stored))
+    })
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.editor', { timeout: 8000 })
     await page.waitForTimeout(500)
     const n = await page.locator('.panel-row').count()
     if (n < 3) throw new Error('resume failed: expected >=3 panels, got ' + n)
     console.log('   resumed panels:', n)
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    await page.waitForSelector('.variant-modal')
+    const migratedMeta = await page.locator('.variant-row-meta').first().textContent()
+    if (!migratedMeta?.includes('300 × 250 cm')) throw new Error('legacy variant dimensions were not migrated to canonical millimeters')
+    await page.getByRole('button', { name: 'Close variants', exact: true }).click()
   })
 
   report()
