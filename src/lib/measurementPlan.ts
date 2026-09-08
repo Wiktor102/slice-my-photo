@@ -1,7 +1,8 @@
 import type { FrameStyle, Panel, PerPanelFrame, Rect, Unit, WallSetup } from '../types'
 import { panelGeometry, resolveFrame } from './geometry'
 
-export const MEASUREMENT_ALIGNMENT_TOLERANCE = 0.5
+/** Physical alignment tolerance in canonical millimeters (0.5 cm in the legacy UI). */
+export const MEASUREMENT_ALIGNMENT_TOLERANCE = 5
 export const HANGING_POINT_ASSUMPTION = 'Top center of the outer frame; no hardware or manufacturer offset is included.'
 
 export interface MeasurementPlanInput {
@@ -113,16 +114,29 @@ function panelGap(
 
 function adjacentGaps(panels: MeasurementPanel[], orientation: MeasurementGapOrientation): MeasurementGap[] {
   const found = new Map<string, MeasurementGap>()
-  for (const panel of panels) {
+  const leadingCoordinate = orientation === 'horizontal'
+    ? (panel: MeasurementPanel) => panel.outer.x
+    : (panel: MeasurementPanel) => panel.outer.y
+
+  // Walk in the direction of the gap and choose the first aligned panel for
+  // each panel. Choosing the globally smallest gap per panel loses a middle
+  // gap when three or more panels share a row or column.
+  const ordered = [...panels].sort((a, b) => leadingCoordinate(a) - leadingCoordinate(b) || a.number - b.number)
+  for (const panel of ordered) {
     const candidates = panels
-      .filter((other) => other.id !== panel.id)
+      .filter((other) => leadingCoordinate(other) > leadingCoordinate(panel) + 1e-6)
       .map((other) => panelGap(panel, other, orientation))
       .filter((gap): gap is MeasurementGap => gap !== null)
-      .sort((a, b) => a.gap - b.gap)
-    const nearest = candidates[0]
-    if (!nearest) continue
-    const key = `${orientation}:${Math.min(nearest.from, nearest.to)}:${Math.max(nearest.from, nearest.to)}`
-    found.set(key, nearest)
+      .sort((a, b) => {
+        const aTarget = panels.find((panelItem) => panelItem.number === a.to)
+        const bTarget = panels.find((panelItem) => panelItem.number === b.to)
+        return (aTarget ? leadingCoordinate(aTarget) : 0) - (bTarget ? leadingCoordinate(bTarget) : 0)
+          || a.gap - b.gap
+      })
+    const nearestForward = candidates[0]
+    if (!nearestForward) continue
+    const key = `${orientation}:${nearestForward.from}:${nearestForward.to}`
+    found.set(key, nearestForward)
   }
   return [...found.values()].sort((a, b) => a.from - b.from || a.to - b.to)
 }

@@ -14,48 +14,64 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
-export async function idbSetImage(value: unknown): Promise<void> {
+/** Returns false when the write fails (e.g. storage quota exceeded). */
+export async function idbSetImage(value: unknown): Promise<boolean> {
+  let db: IDBDatabase | null = null
   try {
-    const db = await openDb()
+    db = await openDb()
+    const activeDb = db
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite')
-      tx.objectStore(STORE).put(value, KEY)
+      const tx = activeDb.transaction(STORE, 'readwrite')
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'))
+      tx.objectStore(STORE).put(value, KEY)
     })
-    db.close()
+    return true
   } catch {
-    /* ignore persistence errors */
+    return false
+  } finally {
+    db?.close()
   }
 }
 
 export async function idbGetImage(): Promise<unknown> {
+  let db: IDBDatabase | null = null
   try {
-    const db = await openDb()
+    db = await openDb()
+    const activeDb = db
     const result = await new Promise<unknown>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly')
+      const tx = activeDb.transaction(STORE, 'readonly')
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'))
       const req = tx.objectStore(STORE).get(KEY)
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
-    db.close()
     return result
   } catch {
     return null
+  } finally {
+    db?.close()
   }
 }
 
-export async function idbClearImage(): Promise<void> {
+/** Returns false when the previous recovery image could not be deleted. */
+export async function idbClearImage(): Promise<boolean> {
+  let db: IDBDatabase | null = null
   try {
-    const db = await openDb()
+    db = await openDb()
+    const activeDb = db
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite')
-      tx.objectStore(STORE).delete(KEY)
+      const tx = activeDb.transaction(STORE, 'readwrite')
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'))
+      tx.objectStore(STORE).delete(KEY)
     })
-    db.close()
+    return true
   } catch {
-    /* ignore */
+    return false
+  } finally {
+    db?.close()
   }
 }

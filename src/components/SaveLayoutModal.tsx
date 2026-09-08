@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { saveLayout, getLayoutByName, makeLayoutId, MAX_LAYOUTS, getAllLayouts } from '../lib/layouts'
+import { CANONICAL_MEASUREMENT_VERSION } from '../lib/migrations'
 
 export function SaveLayoutModal() {
   const setSaveLayoutOpen = useStore((s) => s.setSaveLayoutOpen)
@@ -33,6 +34,7 @@ export function SaveLayoutModal() {
 
     if (confirmOverwrite || !getLayoutByName(trimmed)) {
       const layout = {
+        measurementVersion: CANONICAL_MEASUREMENT_VERSION,
         id: getLayoutByName(trimmed)?.id ?? makeLayoutId(),
         name: trimmed,
         savedAt: Date.now(),
@@ -61,6 +63,7 @@ export function SaveLayoutModal() {
     const trimmed = name.trim()
     const existing = getLayoutByName(trimmed)
     const layout = {
+      measurementVersion: CANONICAL_MEASUREMENT_VERSION,
       id: existing?.id ?? makeLayoutId(),
       name: trimmed,
       savedAt: Date.now(),

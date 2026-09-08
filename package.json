@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:canonical": "node scripts/canonical.test.mjs",
+    "test:measurement-pdf": "node scripts/measurement-pdf.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

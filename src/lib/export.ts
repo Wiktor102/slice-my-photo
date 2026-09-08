@@ -1,15 +1,22 @@
 import JSZip from 'jszip'
 import { jsPDF } from 'jspdf'
-import { saveAs } from 'file-saver'
+import FileSaver from 'file-saver'
 import { useStore, computeImagePlacement } from '../store/useStore'
-import { panelGeometry, resolveFrame, toCm, fromCm, BASE_DPI, CM_PER_INCH } from './geometry'
+import { panelGeometry, resolveFrame, BASE_DPI, CM_PER_INCH } from './geometry'
+import {
+  formatMeasurement,
+  toMm,
+} from './units'
 import { frameHex, matHex } from './frameColors'
 import { computePreflight, sourceCoverageForRect } from './preflight'
 import type { PreflightReport } from './preflight'
 import type { ExportWorkerRequest, PanelCropSpec, VisPanel, VisSpec } from './exportTypes'
+import type { Unit } from '../types'
 
 export type { PanelCropSpec } from './exportTypes'
 import { buildMeasurementPlan, type MeasurementGap, type MeasurementPlan } from './measurementPlan'
+
+const saveAs = FileSaver.saveAs ?? FileSaver
 
 export interface ExportOptions {
   format: 'jpeg' | 'png'
@@ -65,8 +72,8 @@ export function computePlan(options: ExportOptions): ExportPlan {
     const f = resolveFrame(panel, frame, perPanelFrame)
     const geom = panelGeometry(panel, f)
     const vis = geom.visible
-    const visWCm = toCm(vis.w, unit)
-    const visHCm = toCm(vis.h, unit)
+    const visWmm = vis.w
+    const visHmm = vis.h
 
     let relX = (vis.x - placement.panX) / placement.scale
     let relY = (vis.y - placement.panY) / placement.scale
@@ -74,7 +81,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
     let relH = vis.h / placement.scale
 
     if (options.bleedCm > 0) {
-      const bleedWall = fromCm(options.bleedCm, unit)
+      const bleedWall = toMm(options.bleedCm, 'cm')
       const bleedPx = bleedWall / placement.scale
       relX -= bleedPx
       relY -= bleedPx
@@ -82,8 +89,9 @@ export function computePlan(options: ExportOptions): ExportPlan {
       relH += 2 * bleedPx
     }
 
-    let outW = Math.round(((visWCm + 2 * options.bleedCm) / CM_PER_INCH) * BASE_DPI)
-    let outH = Math.round(((visHCm + 2 * options.bleedCm) / CM_PER_INCH) * BASE_DPI)
+    const bleedMm = toMm(options.bleedCm, 'cm')
+    let outW = Math.round(((visWmm + 2 * bleedMm) / (10 * CM_PER_INCH)) * BASE_DPI)
+    let outH = Math.round(((visHmm + 2 * bleedMm) / (10 * CM_PER_INCH)) * BASE_DPI)
 
     // cap to available source resolution
     const coverage = sourceCoverageForRect({ x: relX, y: relY, w: relW, h: relH }, imgW, imgH)
@@ -105,7 +113,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
 
   let visualization: VisSpec | null = null
   if (options.includeVisualization) {
-    const pxPerUnit = 1200 / Math.max(wall.width, wall.height)
+    const pxPerMm = 1200 / Math.max(wall.width, wall.height)
     const visPanels: VisPanel[] = panels.map((panel, i) => {
       const f = resolveFrame(panel, frame, perPanelFrame)
       const g = panelGeometry(panel, f)
@@ -120,7 +128,7 @@ export function computePlan(options: ExportOptions): ExportPlan {
       }
     })
     visualization = {
-      wallW: wall.width, wallH: wall.height, wallColor: wall.color, pxPerUnit,
+      wallW: wall.width, wallH: wall.height, wallColor: wall.color, pxPerMm,
       imgNativeW: sourceImage.nativeWidth, imgNativeH: sourceImage.nativeHeight,
       panX: placement.panX, panY: placement.panY, scale: placement.scale,
       panels: visPanels,
@@ -186,13 +194,12 @@ export async function runExport(options: ExportOptions, onProgress: (done: numbe
   saveAs(zipBlob, 'slice-my-photo-export.zip')
 }
 
-function formatMeasure(value: number): string {
-  const rounded = Math.round(value * 100) / 100
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+function formatMeasure(valueMm: number, unit: Unit): string {
+  return formatMeasurement(valueMm, unit)
 }
 
-function formatSize(width: number, height: number, unit: string): string {
-  return `${formatMeasure(width)} × ${formatMeasure(height)} ${unit}`
+function formatSize(widthMm: number, heightMm: number, unit: Unit): string {
+  return `${formatMeasure(widthMm, unit)} x ${formatMeasure(heightMm, unit)} ${unit}`
 }
 
 function setDashed(pdf: jsPDF, dashed: boolean): void {
@@ -234,14 +241,14 @@ function drawDimensionLine(
   }
 }
 
-function drawGap(pdf: jsPDF, gap: MeasurementGap, offX: number, offY: number, scale: number, unit: string): void {
+function drawGap(pdf: jsPDF, gap: MeasurementGap, offX: number, offY: number, scale: number, unit: Unit): void {
   const x1 = offX + gap.line.x1 * scale
   const y1 = offY + gap.line.y1 * scale
   const x2 = offX + gap.line.x2 * scale
   const y2 = offY + gap.line.y2 * scale
   const offset = gap.orientation === 'horizontal' ? -3 : -3
-  if (gap.orientation === 'horizontal') drawDimensionLine(pdf, x1, y1 + offset, x2, y2 + offset, `${formatMeasure(gap.gap)} ${unit}`, true)
-  else drawDimensionLine(pdf, x1 + offset, y1, x2 + offset, y2, `${formatMeasure(gap.gap)} ${unit}`, false)
+  if (gap.orientation === 'horizontal') drawDimensionLine(pdf, x1, y1 + offset, x2, y2 + offset, `${formatMeasure(gap.gap, unit)} ${unit}`, true)
+  else drawDimensionLine(pdf, x1 + offset, y1, x2 + offset, y2, `${formatMeasure(gap.gap, unit)} ${unit}`, false)
 }
 
 function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number): number {
@@ -250,7 +257,8 @@ function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number)
   const unit = plan.unit === 'cm' ? 'cm' : 'in'
   const columns = [
     { label: 'Frame', width: 18 },
-    { label: 'Outer W × H', width: 42 },
+    { label: 'Outer W x H', width: 42 },
+    { label: 'Image W x H', width: 42 },
     { label: 'Left', width: 22 },
     { label: 'Right', width: 22 },
     { label: 'Top', width: 22 },
@@ -269,6 +277,8 @@ function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number)
   pdf.setTextColor(255, 255, 255)
   pdf.setFontSize(6.5)
   for (const column of columns) {
+    pdf.setFillColor(35, 35, 42)
+    pdf.setTextColor(255, 255, 255)
     pdf.rect(x, y, column.width, rowH, 'FD')
     pdf.text(column.label, x + column.width / 2, y + 5.2, { align: 'center' })
     x += column.width
@@ -281,18 +291,21 @@ function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number)
     const values = [
       `#${panel.number}`,
       formatSize(panel.outer.w, panel.outer.h, unit),
-      `${formatMeasure(panel.wallDistances.left)} ${unit}`,
-      `${formatMeasure(panel.wallDistances.right)} ${unit}`,
-      `${formatMeasure(panel.wallDistances.top)} ${unit}`,
-      `${formatMeasure(panel.wallDistances.bottom)} ${unit}`,
-      `${formatMeasure(panel.hangingPoint.x)} ${unit}`,
-      `${formatMeasure(panel.hangingPoint.y)} ${unit}`,
-      `${formatMeasure(panel.frameEdge)} ${unit}`,
+      formatSize(panel.inner.w, panel.inner.h, unit),
+      `${formatMeasure(panel.wallDistances.left, unit)} ${unit}`,
+      `${formatMeasure(panel.wallDistances.right, unit)} ${unit}`,
+      `${formatMeasure(panel.wallDistances.top, unit)} ${unit}`,
+      `${formatMeasure(panel.wallDistances.bottom, unit)} ${unit}`,
+      `${formatMeasure(panel.hangingPoint.x, unit)} ${unit}`,
+      `${formatMeasure(panel.hangingPoint.y, unit)} ${unit}`,
+      `${formatMeasure(panel.frameEdge, unit)} ${unit}`,
     ]
     pdf.setFillColor(index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 250 : 242)
     pdf.setTextColor(45, 45, 55)
     for (let i = 0; i < columns.length; i++) {
       const column = columns[i]
+      pdf.setFillColor(index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 248 : 238, index % 2 === 0 ? 250 : 242)
+      pdf.setTextColor(45, 45, 55)
       pdf.rect(x, y, column.width, rowH, 'FD')
       pdf.text(values[i], x + column.width / 2, y + 5.2, { align: 'center' })
       x += column.width
@@ -327,6 +340,8 @@ function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number, startIn
   pdf.setDrawColor(145, 145, 155)
   pdf.setTextColor(50, 50, 60)
   for (const column of columns) {
+    pdf.setFillColor(225, 225, 230)
+    pdf.setTextColor(50, 50, 60)
     pdf.rect(x, y, column.width, 7, 'FD')
     pdf.text(column.label, x + 2, y + 4.8)
     x += column.width
@@ -334,10 +349,12 @@ function drawGapTable(pdf: jsPDF, plan: MeasurementPlan, startY: number, startIn
   y += 7
   plan.gaps.slice(startIndex, startIndex + rowLimit).forEach((gap, index) => {
     x = margin
-    const values = [gap.orientation === 'horizontal' ? 'Horizontal' : 'Vertical', `#${gap.from} ↔ #${gap.to}`, formatMeasure(gap.gap)]
+    const values = [gap.orientation === 'horizontal' ? 'Horizontal' : 'Vertical', `#${gap.from} to #${gap.to}`, `${formatMeasure(gap.gap, unit)} ${unit}`]
     pdf.setFillColor(index % 2 === 0 ? 250 : 242, index % 2 === 0 ? 250 : 242, 252)
     for (let i = 0; i < columns.length; i++) {
       const column = columns[i]
+      pdf.setFillColor(index % 2 === 0 ? 250 : 242, index % 2 === 0 ? 250 : 242, 252)
+      pdf.setTextColor(50, 50, 60)
       pdf.rect(x, y, column.width, 7, 'FD')
       pdf.text(values[i], x + 2, y + 4.8)
       x += column.width
@@ -412,7 +429,7 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
   pdf.text('Installation Guide', margin, 14)
   pdf.setTextColor(100, 100, 112)
   pdf.setFontSize(8)
-  pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} · origin (0, 0) is top-left`, pageW - margin, 13.5, { align: 'right' })
+  pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} | origin (0, 0) is top-left`, pageW - margin, 13.5, { align: 'right' })
   pdf.text('Frame rectangles show outer dimensions. Dashed rectangles show the inner image area.', margin, 20)
 
   pdf.setFillColor(245, 245, 245)
@@ -430,8 +447,7 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
   setDashed(pdf, false)
   pdf.setTextColor(165, 105, 35)
   pdf.setFontSize(5.8)
-  pdf.text(`V center ${formatMeasure(plan.centerlines.verticalX)} ${unit}`, centerX + 1.5, offY + 5)
-  pdf.text(`H center ${formatMeasure(plan.centerlines.horizontalY)} ${unit}`, offX + 2, centerY - 1.5)
+  pdf.text(`V center ${formatMeasure(plan.centerlines.verticalX, unit)} ${unit}`, centerX + 1.5, offY + 5)
 
   for (const panel of plan.panels) {
     const outer = pageRect(panel.outer, offX, offY, scale)
@@ -464,7 +480,7 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
     pdf.circle(hangingX, hangingY, 1.4, 'FD')
     pdf.setTextColor(35, 80, 150)
     pdf.setFontSize(5.8)
-    pdf.text(`H${panel.number}`, hangingX + 2, Math.max(drawTop + 4, hangingY - 2))
+    pdf.text(`H${panel.number}`, hangingX + 2, Math.min(offY + wallH - 2, hangingY + 4))
   }
 
   for (const gap of plan.gaps) drawGap(pdf, gap, offX, offY, scale, unit)
@@ -475,10 +491,10 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
   pdf.line(margin, footerY - 4, pageW - margin, footerY - 4)
   pdf.setTextColor(70, 70, 80)
   pdf.setFontSize(7)
-  pdf.text('● H1/H2… = hanging point at the outer-frame top center. Coordinates and edge distances are on page 2.', margin, footerY + 2)
+  pdf.text('H1/H2... = hanging point at the outer-frame top center. Coordinates and edge distances are on page 2.', margin, footerY + 2)
   pdf.text('Hanging-point assumption: no hardware offset is included. Confirm the actual hanger position from the frame or hardware manufacturer before drilling.', margin, footerY + 8)
   pdf.setTextColor(120, 120, 130)
-  pdf.text(`Centerlines: vertical X ${formatMeasure(plan.centerlines.verticalX)} ${unit} · horizontal Y ${formatMeasure(plan.centerlines.horizontalY)} ${unit}`, margin, footerY + 14)
+  pdf.text(`Centerlines: vertical X ${formatMeasure(plan.centerlines.verticalX, unit)} ${unit} | horizontal Y ${formatMeasure(plan.centerlines.horizontalY, unit)} ${unit}`, margin, footerY + 14)
   pdf.text(`Page 1 of ${pageCount}`, pageW - margin, footerY + 14, { align: 'right' })
 }
 
@@ -493,8 +509,8 @@ function drawSchedulePage(pdf: jsPDF, plan: MeasurementPlan, pageCount: number):
   pdf.text('Installation Schedule', margin, 14)
   pdf.setTextColor(100, 100, 112)
   pdf.setFontSize(8)
-  pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} · ${plan.panels.length} frame${plan.panels.length === 1 ? '' : 's'}`, pageW - margin, 13.5, { align: 'right' })
-  pdf.text('All distances are measured from the wall origin at the top-left. “Hang” is the assumed outer-frame top-center point.', margin, 20)
+  pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} | ${plan.panels.length} frame${plan.panels.length === 1 ? '' : 's'}`, pageW - margin, 13.5, { align: 'right' })
+  pdf.text('All distances are measured from the wall origin at the top-left. "Hang" is the assumed outer-frame top-center point.', margin, 20)
 
   const tableBottom = drawMeasurementTable(pdf, plan, SCHEDULE_TABLE_TOP)
   const noteTop = pageH - SCHEDULE_NOTE_BOTTOM - SCHEDULE_NOTE_HEIGHT
