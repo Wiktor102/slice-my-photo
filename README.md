@@ -2,13 +2,22 @@
 
 [English](#slice-my-photo-1) | Polski
 
-**Slice My Photo** to webowe narzędzie do projektowania obrazów dzielonych na wiele paneli, które pozwala rozłożyć pojedyncze zdjęcie na kilka oprawionych ramkami segmentów, zaplanować ich układ na wirtualnej ścianie i wyeksportować pliki gotowe do druku. Niezależnie od tego, czy chcesz stworzyć klasyczny tryptyk, symetryczną siatkę, czy całkowicie dowolny układ, narzędzie daje Ci pełną kontrolę nad każdym szczegółem.
+**Slice My Photo** to internetowe narzędzie do projektowania ściany złożonej z wielu paneli. Podziel jedno zdjęcie na oprawione segmenty, ustaw ich układ i przygotuj pliki do druku. Zaprojektuj dyptyk, tryptyk, siatkę albo własną kompozycję.
 
-Wczytaj zdjęcie, ustaw wymiary ściany i dodaj do ośmiu paneli. Wybierz jeden z gotowych układów, takich jak dyptyk, tryptyk lub zestaw panoramiczny, albo rozmieść panele swobodnie z inteligentnym przyciąganiem. Każdy panel może mieć własny styl ramki — wybierz jeden z siedmiu gotowych kolorów lub ustaw własny, dostosuj szerokość ramki i włącz cień. Passepartout można skonfigurować dla każdego panelu osobno, wybierając dokładny wymiar otwarcia, równomierne wcięcie lub niezależne marginesy z każdej strony.
+## Najważniejsze funkcje
 
-Gdy wszystko jest już na swoim miejscu, ustaw obraz w każdym panelu w jednym z trzech trybów: dopasuj całe zdjęcie, wypełnij ramkę z przycięciem lub przeciągnij i skaluj ręcznie. Eksport pakuje każdy panel jako wysokiej rozdzielczości JPEG lub PNG, generuje wizualizację całej ściany i tworzy plik PDF ze wszystkimi wymiarami – gotowy do wydruku lub oprawienia.
+- Dodaj do ośmiu paneli, ustaw wymiary ściany i pracuj w centymetrach lub calach.
+- Zacznij od gotowego układu, rozmieszczaj panele swobodnie i przyciągaj je do krawędzi, środków oraz równych odstępów.
+- Ustaw wspólny styl ramy albo zmieniaj go osobno dla każdego panelu. Wybierz kolor, szerokość krawędzi, cień i ustawienia passepartout.
+- Dopasuj całe zdjęcie, wypełnij panel z przycięciem albo ustaw pozycję i skalę ręcznie.
+- Sprawdź projekt przed drukiem. Kontrola jakości pokazuje DPI, pokrycie obrazu, nakładanie paneli i elementy wychodzące poza ścianę.
+- Otwórz podgląd tylko do odczytu z numerami paneli, aby obejrzeć gotowy układ bez przypadkowych zmian.
+- Pobierz ZIP z osobnymi plikami JPEG lub PNG. Dołącz wizualizację ściany oraz arkusz PDF z wymiarami paneli, obszarów obrazu, odstępów i szerokościami krawędzi poszczególnych ramek. Eksport celuje w 300 DPI, a aplikacja ostrzega o niższym efektywnym DPI i ogranicza rozmiar pliku do rozdzielczości zdjęcia.
+- Zapisuj układy w tej przeglądarce, wczytuj je później i cofaj lub ponawiaj zmiany.
 
-Projekt został zbudowany z użyciem React 19, TypeScript i Vite. Renderowanie na canvasie obsługuje Konva.js, stan aplikacji zarządzany jest przez Zustand, a zadania eksportu działają poza głównym wątkiem dzięki Web Workerom. Dane sesji są przechowywane w localStorage i IndexedDB, więc możesz odświeżyć stronę i kontynuować dokładnie w miejscu, w którym skończyłeś.
+## Szczegóły techniczne
+
+Projekt korzysta z React 19, TypeScript i Vite. Konva.js obsługuje renderowanie canvasu, a Zustand zarządza stanem aplikacji. Web Worker generuje kadry paneli i wizualizację ściany. Przeglądarka tworzy archiwum ZIP i PDF z pomiarami w głównym wątku. Kod eksportu i jego zależności są ładowane dopiero po otwarciu okna eksportu. Układ i ustawienia projektu są zapisywane w localStorage. Oryginalne zdjęcie jest przechowywane osobno w IndexedDB na potrzeby przywrócenia po odświeżeniu, jeśli przeglądarka na to pozwala. Ograniczenia miejsca lub prywatności mogą wymagać ponownego wczytania zdjęcia.
 
 ---
 
@@ -16,19 +25,28 @@ Projekt został zbudowany z użyciem React 19, TypeScript i Vite. Renderowanie n
 
 English | [Polski](#slice-my-photo)
 
-**Slice My Photo** is a web-based wall art panel designer that lets you split a single photograph across multiple framed panels, plan the arrangement on a virtual wall, and export print-ready files. Whether you want a classic triptych, a symmetrical grid, or a completely custom layout, the tool gives you full control over every detail.
+**Slice My Photo** is a browser-based wall art panel designer. Split one photograph across framed panels, arrange them on a virtual wall, and prepare files for printing. Build a diptych, triptych, grid, or custom composition.
 
-Upload an image, configure your wall dimensions, and add up to eight panels. Choose from preset layouts like a diptych, triptych, or a panoramic set, or arrange panels freely with smart snapping guides. Each panel can have its own frame style — pick from seven preset colors or set a custom one, adjust the frame width, and toggle a drop shadow. The passepartout (mat) can be configured per panel with either an exact opening size, a uniform inset, or independent margins on each side.
+## Highlights
 
-Once everything is in place, position the image within each panel in one of three modes: fit the whole image, fill the frame with cropping, or drag and scale manually. The export tool packages every panel as a high-resolution JPEG or PNG, generates a visualization of the full wall, and produces a PDF with all measurements clearly labeled — ready for printing or framing.
+- Add up to eight panels, set wall dimensions, and work in centimeters or inches.
+- Start from a preset, place panels freely, and snap them to edges, centers, and matching gaps.
+- Use one shared frame style or set each panel independently. Choose frame colors, edge widths, shadows, and passepartout settings.
+- Fit the whole photo, fill panels with cropping, or position and scale the image by hand.
+- Check the layout before printing. Print preflight reports DPI, image coverage, panel overlaps, and areas outside the wall.
+- Open a read-only preview with numbered panels to inspect the finished arrangement without accidental edits.
+- Download a ZIP with separate JPEG or PNG files. Add a full-wall visualization and a measurements PDF with panel dimensions, image areas, gaps, and the resolved frame-edge width for each panel. Export targets 300 DPI, flags lower effective DPI, and caps file dimensions at the source image resolution.
+- Save layouts in this browser, load them later, and undo or redo changes.
 
-The project is built with React 19, TypeScript, and Vite. Canvas rendering is handled by Konva.js, state is managed with Zustand, and export tasks run off the main thread using Web Workers. Session data persists in localStorage and IndexedDB, so you can reload the page and pick up right where you left off.
+## Technical details
+
+The project uses React 19, TypeScript, and Vite. Konva.js handles canvas rendering, and Zustand manages application state. A Web Worker generates panel crops and the wall visualization. The browser assembles the ZIP and measurements PDF on the main thread. Export code and its dependencies load only when Export opens. Project layout and settings persist in localStorage. The original image is stored separately in IndexedDB for reload recovery when the browser permits it. Storage limits or privacy restrictions may require the image to be uploaded again after a refresh.
 
 ## Development
 
-Install the dependencies with `pnpm install`, then start the development server with `pnpm dev`. The application opens at `http://localhost:5173`. To create a production build, run `pnpm build` — the output lands in the `dist/` directory and can be previewed locally with `pnpm preview`.
+Install the dependencies with `pnpm install`, then start the development server with `pnpm dev`. The application opens at `http://localhost:5173`. To create a production build, run `pnpm build`. The output lands in the `dist/` directory and can be previewed locally with `pnpm preview`.
 
-Run `pnpm lint` to check the code with ESLint. A Playwright smoke test is available under `scripts/smoke.mjs` — it uploads a test image, applies a preset, adjusts styling, exports a ZIP, and verifies session persistence. Before running it, make sure Playwright browsers are installed with `pnpm exec playwright install chromium`.
+Run `pnpm lint` to check the code with ESLint. A Playwright smoke test is available under `scripts/smoke.mjs`. It uploads a test image, applies a preset, adjusts styling, exports a ZIP, and verifies session persistence. Before running it, make sure Playwright browsers are installed with `pnpm exec playwright install chromium`.
 
 **Contributions are welcome**.
 

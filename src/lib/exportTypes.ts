@@ -25,7 +25,8 @@ export interface VisSpec {
   wallW: number
   wallH: number
   wallColor: string
-  pxPerUnit: number
+  /** Visualization pixels per canonical millimeter. */
+  pxPerMm: number
   imgNativeW: number
   imgNativeH: number
   panX: number

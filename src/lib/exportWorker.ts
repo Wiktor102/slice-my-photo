@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import type { ExportWorkerRequest } from './exportTypes'
+import { PANEL_SHADOW_BLUR_MM, PANEL_SHADOW_OFFSET_Y_MM } from './units'
 
 function drawClipped(
   ctx: OffscreenCanvasRenderingContext2D,
@@ -47,22 +48,22 @@ self.onmessage = async (e: MessageEvent<ExportWorkerRequest>) => {
 
     if (visualization) {
       const v = visualization
-      const canvas = new OffscreenCanvas(Math.round(v.wallW * v.pxPerUnit), Math.round(v.wallH * v.pxPerUnit))
+      const canvas = new OffscreenCanvas(Math.round(v.wallW * v.pxPerMm), Math.round(v.wallH * v.pxPerMm))
       const ctx = canvas.getContext('2d')!
       // wall
       ctx.fillStyle = v.wallColor
       ctx.fillRect(0, 0, canvas.width, canvas.height)
-      const imgWpx = v.imgNativeW * v.scale * v.pxPerUnit
-      const imgHpx = v.imgNativeH * v.scale * v.pxPerUnit
-      const imgXpx = v.panX * v.pxPerUnit
-      const imgYpx = v.panY * v.pxPerUnit
+      const imgWpx = v.imgNativeW * v.scale * v.pxPerMm
+      const imgHpx = v.imgNativeH * v.scale * v.pxPerMm
+      const imgXpx = v.panX * v.pxPerMm
+      const imgYpx = v.panY * v.pxPerMm
       for (const panel of v.panels) {
-        const O = (n: number) => n * v.pxPerUnit
+        const O = (n: number) => n * v.pxPerMm
         if (panel.shadow) {
           ctx.save()
           ctx.shadowColor = 'rgba(0,0,0,0.35)'
-          ctx.shadowBlur = 18 * v.pxPerUnit
-          ctx.shadowOffsetY = 6 * v.pxPerUnit
+          ctx.shadowBlur = PANEL_SHADOW_BLUR_MM * v.pxPerMm
+          ctx.shadowOffsetY = PANEL_SHADOW_OFFSET_Y_MM * v.pxPerMm
           ctx.fillStyle = panel.frameColor
           ctx.fillRect(O(panel.outerX), O(panel.outerY), O(panel.outerW), O(panel.outerH))
           ctx.restore()

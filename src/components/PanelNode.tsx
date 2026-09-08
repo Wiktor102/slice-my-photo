@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react'
 import { Group, Rect, Transformer, Text, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { Panel, PerPanelFrame, SourceImage } from '../types'
-import { panelGeometry, computeSnaps } from '../lib/geometry'
+import { clampOuterPosition, panelGeometry, computeSnaps } from '../lib/geometry'
 import { frameHex, matHex } from '../lib/frameColors'
 import { useStore } from '../store/useStore'
 import type { SnapLines } from '../types'
+import { formatMeasurement, MIN_PANEL_SIZE_MM, PANEL_SHADOW_BLUR_MM, PANEL_SHADOW_OFFSET_Y_MM } from '../lib/units'
 
 interface Props {
   panel: Panel
@@ -32,6 +33,7 @@ export function PanelNode({
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const setPanelOuterPosition = useStore((s) => s.setPanelOuterPosition)
+  const moveSelectedPanels = useStore((s) => s.moveSelectedPanels)
   const setPanelSize = useStore((s) => s.setPanelSize)
   const selectPanel = useStore((s) => s.selectPanel)
   const beginHistoryGroup = useStore((s) => s.beginHistoryGroup)
@@ -49,6 +51,10 @@ export function PanelNode({
   const handleSelect = (event: Konva.KonvaEventObject<MouseEvent>) => {
     if (!interactive) return
     const additive = event.evt.shiftKey || event.evt.ctrlKey || event.evt.metaKey
+    const currentSelectedIds = useStore.getState().selectedIds
+    // Keep a multi-selection intact when the user starts dragging one of its
+    // members. Modifier clicks still toggle selection as expected.
+    if (!additive && selected && currentSelectedIds.length > 1) return
     selectPanel(panel.id, additive)
   }
 
@@ -64,7 +70,7 @@ export function PanelNode({
         tr.nodes([])
       }
     }
-  }, [selected, outer.x, outer.y, outer.w, outer.h])
+  }, [selected, transformable, outer.x, outer.y, outer.w, outer.h])
 
   const handleDragMove = (ev: Konva.KonvaEventObject<DragEvent>) => {
     const node = ev.target as Konva.Group
@@ -84,20 +90,32 @@ export function PanelNode({
     ox += res.offsetX
     oy += res.offsetY
     const wall = st.wall
-    ox = Math.max(0, Math.min(ox, wall.width - outer.w))
-    oy = Math.max(0, Math.min(oy, wall.height - outer.h))
+    ox = clampOuterPosition(ox, outer.w, wall.width)
+    oy = clampOuterPosition(oy, outer.h, wall.height)
     node.x(ox)
     node.y(oy)
     setSnapLines({ vertical: res.vertical, horizontal: res.horizontal })
-    const unit = st.unit
-    const parts: string[] = [`X ${Math.round(ox * 10) / 10}, Y ${Math.round(oy * 10) / 10}`]
-    const fmtGap = (g: number) => (Math.round(g * 10) / 10).toString()
+    const selectedCount = st.selectedIds.length
+    if (selectedCount > 1) {
+      moveSelectedPanels(panel.id, ox, oy)
+      const movedPanel = useStore.getState().panels.find((candidate) => candidate.id === panel.id)
+      if (movedPanel) {
+        ox = movedPanel.x - e
+        oy = movedPanel.y - e
+        node.x(ox)
+        node.y(oy)
+      }
+    } else {
+      setPanelOuterPosition(panel.id, ox, oy)
+    }
+    const unit = useStore.getState().unit
+    const parts: string[] = [`X ${formatMeasurement(ox, unit, 1)}, Y ${formatMeasurement(oy, unit, 1)}`]
+    const fmtGap = (g: number) => formatMeasurement(g, unit, 1)
     if (res.kindX === 'gap' && res.gapX != null) parts.push(`gap ${fmtGap(res.gapX)} ${unit}`)
     else if (res.kindX === 'mid') parts.push('centered')
     if (res.kindY === 'gap' && res.gapY != null) parts.push(`gap ${fmtGap(res.gapY)} ${unit}`)
     else if (res.kindY === 'mid') parts.push('centered')
     setTip(parts.join(' · '))
-    setPanelOuterPosition(panel.id, ox, oy)
   }
 
   const handleDragStart = () => {
@@ -121,9 +139,10 @@ export function PanelNode({
     const sy = node.scaleY()
     const newOuterW = outer.w * sx
     const newOuterH = outer.h * sy
-    const newInnerW = Math.max(10, newOuterW - 2 * e)
-    const newInnerH = Math.max(10, newOuterH - 2 * e)
-    setTip(`${Math.round(newInnerW * 10) / 10} × ${Math.round(newInnerH * 10) / 10}`)
+    const newInnerW = Math.max(MIN_PANEL_SIZE_MM, newOuterW - 2 * e)
+    const newInnerH = Math.max(MIN_PANEL_SIZE_MM, newOuterH - 2 * e)
+    const displayUnit = panel.displayUnit ?? useStore.getState().unit
+    setTip(`${formatMeasurement(newInnerW, displayUnit)} × ${formatMeasurement(newInnerH, displayUnit)} ${displayUnit}`)
   }
 
   const handleTransformEnd = () => {
@@ -133,8 +152,8 @@ export function PanelNode({
     const sy = node.scaleY()
     const newOuterX = node.x()
     const newOuterY = node.y()
-    const newOuterW = Math.max(10 + 2 * e, outer.w * sx)
-    const newOuterH = Math.max(10 + 2 * e, outer.h * sy)
+    const newOuterW = Math.max(MIN_PANEL_SIZE_MM + 2 * e, outer.w * sx)
+    const newOuterH = Math.max(MIN_PANEL_SIZE_MM + 2 * e, outer.h * sy)
     const newInnerW = newOuterW - 2 * e
     const newInnerH = newOuterH - 2 * e
     node.scaleX(1)
@@ -177,8 +196,8 @@ export function PanelNode({
           height={outer.h}
           fill={frameColor}
           shadow={frame.shadow ? 'black' : undefined}
-          shadowBlur={frame.shadow ? 18 : 0}
-          shadowOffset={{ x: 0, y: 6 }}
+          shadowBlur={frame.shadow ? PANEL_SHADOW_BLUR_MM : 0}
+          shadowOffset={{ x: 0, y: PANEL_SHADOW_OFFSET_Y_MM }}
           shadowOpacity={frame.shadow ? 0.35 : 0}
           shadowForStrokeEnabled={false}
         />
@@ -247,7 +266,7 @@ export function PanelNode({
           anchorCornerRadius={2}
           flipEnabled={false}
           boundBoxFunc={(oldBox, newBox) => {
-            const minOuterScreen = (10 + 2 * e) * viewportScale
+            const minOuterScreen = (MIN_PANEL_SIZE_MM + 2 * e) * viewportScale
             if (newBox.width < minOuterScreen || newBox.height < minOuterScreen) return oldBox
             return newBox
           }}

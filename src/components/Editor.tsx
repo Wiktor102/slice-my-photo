@@ -42,8 +42,9 @@ export function Editor() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || preview || imageSelected || selectedIds.length === 0) return
-      const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea, select, button, [contenteditable="true"]')) return
+      const target = event.target instanceof HTMLElement ? event.target : null
+      if (target?.closest('input, textarea, select, button, .modal-overlay, .compare-overlay, [role="dialog"]') || target?.isContentEditable) return
+      if (exportOpen || confirmReset || homeOpen || saveLayoutOpen || loadLayoutOpen || document.querySelector('.modal-overlay, .compare-overlay, [role="dialog"]')) return
       const del = event.key === 'Delete' || event.key === 'Backspace'
       if (del) {
         event.preventDefault()
@@ -63,7 +64,7 @@ export function Editor() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [deleteSelectedPanels, imageSelected, nudgeSelectedPanels, preview, selectedIds.length])
+  }, [confirmReset, deleteSelectedPanels, exportOpen, homeOpen, imageSelected, loadLayoutOpen, nudgeSelectedPanels, preview, saveLayoutOpen, selectedIds.length])
 
   if (preview) return <PreviewMode />
 
