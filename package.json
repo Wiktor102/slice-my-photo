@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:canonical": "node scripts/canonical.test.mjs",
+    "test:multi-select": "node scripts/multi-select.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
