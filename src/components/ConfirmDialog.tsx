@@ -7,9 +7,10 @@ interface Props {
   onConfirm: () => void
   onCancel: () => void
   destructive?: boolean
+  disabled?: boolean
 }
 
-export function ConfirmDialog({ open, title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, destructive }: Props) {
+export function ConfirmDialog({ open, title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, destructive, disabled = false }: Props) {
   if (!open) return null
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -17,8 +18,8 @@ export function ConfirmDialog({ open, title, body, confirmLabel = 'Confirm', can
         <h2>{title}</h2>
         <div className="hint" style={{ fontSize: 13 }}>{body}</div>
         <div className="modal-actions">
-          <button onClick={onCancel}>{cancelLabel}</button>
-          <button className={destructive ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</button>
+          <button disabled={disabled} onClick={onCancel}>{cancelLabel}</button>
+          <button disabled={disabled} className={destructive ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>
     </div>
