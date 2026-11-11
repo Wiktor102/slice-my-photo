@@ -258,7 +258,7 @@ function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number)
   const columns = [
     { label: 'Frame', width: 18 },
     { label: 'Outer W x H', width: 42 },
-    { label: 'Image W x H', width: 42 },
+    { label: 'Photo W x H', width: 42 },
     { label: 'Left', width: 22 },
     { label: 'Right', width: 22 },
     { label: 'Top', width: 22 },
@@ -291,7 +291,7 @@ function drawMeasurementTable(pdf: jsPDF, plan: MeasurementPlan, startY: number)
     const values = [
       `#${panel.number}`,
       formatSize(panel.outer.w, panel.outer.h, unit),
-      formatSize(panel.inner.w, panel.inner.h, unit),
+      formatSize(panel.visible.w, panel.visible.h, unit),
       `${formatMeasure(panel.wallDistances.left, unit)} ${unit}`,
       `${formatMeasure(panel.wallDistances.right, unit)} ${unit}`,
       `${formatMeasure(panel.wallDistances.top, unit)} ${unit}`,
@@ -403,7 +403,7 @@ function drawInstallationNotes(pdf: jsPDF, plan: MeasurementPlan, noteTop: numbe
   pdf.setTextColor(90, 90, 100)
   pdf.setFontSize(6.8)
   const notes = pdf.splitTextToSize(
-    `Hanging point assumption: ${plan.hangingPointAssumption} Use the Hang X / Hang Y coordinates as layout references only; do not infer a hook, cleat, wire, or bracket offset. Verify the actual hardware position against the frame and its manufacturer instructions. Outer dimensions include each panel's resolved frame edge width (${unit}).`,
+    `Hanging point assumption: ${plan.hangingPointAssumption} Use the Hang X / Hang Y coordinates as layout references only; do not infer a hook, cleat, wire, or bracket offset. Verify the actual hardware position against the frame and its manufacturer instructions. Outer dimensions include each panel's resolved frame edge width (${unit}). Photo dimensions describe the visible opening after matting and exclude export bleed.`,
     pageW - margin * 2 - 8,
   )
   pdf.text(notes, margin + 4, noteTop + 12)
@@ -430,7 +430,7 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
   pdf.setTextColor(100, 100, 112)
   pdf.setFontSize(8)
   pdf.text(`Wall: ${formatSize(plan.wall.width, plan.wall.height, unit)} | origin (0, 0) is top-left`, pageW - margin, 13.5, { align: 'right' })
-  pdf.text('Frame rectangles show outer dimensions. Dashed rectangles show the inner image area.', margin, 20)
+  pdf.text('Frame rectangles show outer dimensions. Dashed rectangles show the visible photo opening after matting.', margin, 20)
 
   pdf.setFillColor(245, 245, 245)
   pdf.setDrawColor(55, 55, 65)
@@ -451,7 +451,7 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
 
   for (const panel of plan.panels) {
     const outer = pageRect(panel.outer, offX, offY, scale)
-    const inner = pageRect(panel.inner, offX, offY, scale)
+    const visible = pageRect(panel.visible, offX, offY, scale)
     pdf.setFillColor(255, 255, 255)
     pdf.setDrawColor(30, 30, 38)
     pdf.setLineWidth(0.45)
@@ -459,7 +459,7 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
     setDashed(pdf, true)
     pdf.setDrawColor(125, 125, 135)
     pdf.setLineWidth(0.2)
-    pdf.rect(inner.x, inner.y, inner.w, inner.h, 'D')
+    pdf.rect(visible.x, visible.y, visible.w, visible.h, 'D')
     setDashed(pdf, false)
 
     pdf.setTextColor(35, 35, 45)

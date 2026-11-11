@@ -38,6 +38,8 @@ export interface MeasurementPanel {
   id: string
   outer: Rect
   inner: Rect
+  /** Visible photo opening after applying the resolved mat. */
+  visible: Rect
   frameEdge: number
   wallDistances: WallEdgeDistances
   hangingPoint: HangingPoint
@@ -157,6 +159,7 @@ export function buildMeasurementPlan(input: MeasurementPlanInput): MeasurementPl
       id: panel.id,
       outer: { ...outer },
       inner: { ...geometry.inner },
+      visible: { ...geometry.visible },
       frameEdge: resolved.edgeWidth,
       wallDistances: {
         left: outer.x,

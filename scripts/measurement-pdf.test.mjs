@@ -77,6 +77,44 @@ try {
   assert.deepEqual(plan.panels.map((panel) => panel.frameEdge), [2, 3, 4, 5, 6, 7, 8, 9])
   assert.equal(plan.gaps.filter((gap) => gap.orientation === 'horizontal').length, 7)
 
+  // A mat changes the photo opening, not the frame or hanging coordinates.
+  // Cover every mat mode and retain input order even when IDs sort differently.
+  const matModes = [
+    { enabled: false, mode: 'inset', inset: 10 },
+    { enabled: true, mode: 'inset', inset: 10 },
+    { enabled: true, mode: 'opening', openingWidth: 60, openingHeight: 80 },
+    { enabled: true, mode: 'margins', marginTop: 5, marginRight: 10, marginBottom: 15, marginLeft: 20 },
+  ]
+  const matPanels = panels.slice(0, 4).map((panel, index) => ({
+    ...panel,
+    id: `mat-${4 - index}`,
+    passepartout: { ...perPanelFrame[panel.id].passepartout, ...matModes[index] },
+  }))
+  const matFrames = Object.fromEntries(matPanels.map((panel, index) => [panel.id, {
+    ...perPanelFrame[panels[index].id],
+    passepartout: panel.passepartout,
+  }]))
+  const matPlan = buildMeasurementPlan({
+    wall: plan.wall, panels: matPanels, frame, perPanelFrame: matFrames, unit: 'cm',
+  })
+  assert.deepEqual(matPlan.panels.map((panel) => panel.id), matPanels.map((panel) => panel.id))
+  assert.deepEqual(matPlan.panels.map((panel) => panel.visible), [
+    { x: 50, y: 180, w: 100, h: 120 },
+    { x: 185, y: 190, w: 80, h: 100 },
+    { x: 320, y: 200, w: 60, h: 80 },
+    { x: 445, y: 185, w: 70, h: 100 },
+  ])
+  assert.deepEqual(matPlan.panels[1].outer, { x: 172, y: 177, w: 106, h: 126 })
+  assert.deepEqual(matPlan.panels[1].wallDistances, { left: 172, right: 822, top: 177, bottom: 197 })
+  assert.deepEqual(matPlan.panels[1].hangingPoint, { x: 225, y: 177 })
+  for (const [unit, expectedSize] of [['cm', '8 x 10 cm'], ['in', '3.15 x 3.94 in']]) {
+    const matPdf = buildMeasurementsPdf({ ...matPlan, unit })
+    const matText = matPdf.output()
+    assert.match(matText, /Photo W x H/)
+    assert.ok(matText.includes(`(${expectedSize})`), `missing photo dimensions: ${expectedSize}`)
+    writeFileSync(join(tempDir, `measurement-guide-mats-${unit}.pdf`), Buffer.from(matPdf.output('arraybuffer')))
+  }
+
   const pdf = buildMeasurementsPdf(plan)
   const pdfPath = join(tempDir, 'measurement-guide.pdf')
   const pdfBytes = Buffer.from(pdf.output('arraybuffer'))
@@ -91,7 +129,7 @@ try {
     .map((match) => match[1].replace(/\\([()\\])/g, '$1'))
     .join('\n')
   assert.match(extracted, /Installation Guide/)
-  assert.match(extracted, /Image W x H/)
+  assert.match(extracted, /Photo W x H/)
   assert.match(extracted, /43\.31 x 19\.69 in/)
   assert.match(extracted, /#1 to #2/)
   assert.doesNotMatch(extracted, /[^\x00-\x7F]/)
