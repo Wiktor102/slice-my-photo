@@ -33,6 +33,7 @@ try {
     viewportZoomPercent,
   } = await server.ssrLoadModule('/src/lib/units.ts')
   const { migrateMeasurements, migrateSavedLayout } = await server.ssrLoadModule('/src/lib/migrations.ts')
+  const { buildMeasurementPlan } = await server.ssrLoadModule('/src/lib/measurementPlan.ts')
   const { niceViewportStepMm } = await server.ssrLoadModule('/src/lib/viewport.ts')
   const { FRAME_SIZES, findPreset } = await server.ssrLoadModule('/src/lib/frameSizes.ts')
   const { PRESETS, instantiatePreset } = await server.ssrLoadModule('/src/lib/presets.ts')
@@ -191,6 +192,45 @@ try {
   const inchAfter = useStore.getState().panels.find((entry) => entry.id === inchPanel.id)
   assert.equal(inchAfter.displayUnit, 'in')
   close(inchAfter.width, toMm(16, 'in'))
+
+  const measurementFrame = {
+    edgeWidth: 0,
+    colorKey: 'black',
+    customColor: '#000000',
+    matEnabled: false,
+    matWidth: 0,
+    matColorKey: 'white',
+    matCustomColor: '#ffffff',
+    shadow: false,
+    perPanel: false,
+  }
+  const measurementPanels = [
+    [0, 100], [110, 100], [310, 100], [420, 100],
+    [700, 300], [700, 420], [700, 550],
+  ].map(([x, y], index) => ({
+    id: `measurement-${index + 1}`,
+    width: 100,
+    height: 100,
+    x,
+    y,
+    sizePreset: 'custom',
+    displayUnit: 'cm',
+  }))
+  const measurementPlan = buildMeasurementPlan({
+    wall: { width: 900, height: 700, color: '#ffffff' },
+    panels: measurementPanels,
+    frame: measurementFrame,
+    perPanelFrame: {},
+    unit: 'cm',
+  })
+  assert.deepEqual(
+    measurementPlan.gaps.filter((gap) => gap.orientation === 'horizontal').map((gap) => [gap.from, gap.to, gap.gap]),
+    [[1, 2, 10], [2, 3, 100], [3, 4, 10]],
+  )
+  assert.deepEqual(
+    measurementPlan.gaps.filter((gap) => gap.orientation === 'vertical').map((gap) => [gap.from, gap.to, gap.gap]),
+    [[5, 6, 20], [6, 7, 30]],
+  )
 
   console.log('canonical measurement tests passed')
 } finally {
