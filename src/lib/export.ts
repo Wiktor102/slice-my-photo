@@ -417,7 +417,8 @@ function drawInstallationGuidePage(pdf: jsPDF, plan: MeasurementPlan, pageCount:
   const drawTop = 27
   const footerH = 26
   const drawW = pageW - margin * 2
-  const drawH = pageH - drawTop - footerH
+  // Leave room above the footer rule even when a tall wall fills the height.
+  const drawH = pageH - drawTop - footerH - 6
   const scale = Math.min(drawW / plan.wall.width, drawH / plan.wall.height)
   const wallW = plan.wall.width * scale
   const wallH = plan.wall.height * scale

@@ -115,6 +115,15 @@ try {
     writeFileSync(join(tempDir, `measurement-guide-mats-${unit}.pdf`), Buffer.from(matPdf.output('arraybuffer')))
   }
 
+  // Tall walls use the full diagram height. Keep the wall above the footer
+  // separator, including when horizontal room is plentiful.
+  const tallPdf = buildMeasurementsPdf({ ...plan, wall: { ...plan.wall, width: 1100, height: 1100 } })
+  const firstRect = tallPdf.output().match(/([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re/)
+  assert.ok(firstRect, 'missing wall rectangle')
+  const wallBottom = tallPdf.internal.pageSize.getHeight()
+    - (Number(firstRect[2]) + Number(firstRect[4])) / tallPdf.internal.scaleFactor
+  assert.ok(wallBottom < 182, `wall overlaps the footer separator: bottom ${wallBottom} mm`)
+
   const pdf = buildMeasurementsPdf(plan)
   const pdfPath = join(tempDir, 'measurement-guide.pdf')
   const pdfBytes = Buffer.from(pdf.output('arraybuffer'))
