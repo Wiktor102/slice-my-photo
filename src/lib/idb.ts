@@ -14,6 +14,21 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
+export async function idbSetImageStrict(value: unknown): Promise<void> {
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'))
+      tx.objectStore(STORE).put(value, KEY)
+    })
+  } finally {
+    db.close()
+  }
+}
+
 /** Returns false when the write fails (e.g. storage quota exceeded). */
 export async function idbSetImage(value: unknown): Promise<boolean> {
   let db: IDBDatabase | null = null

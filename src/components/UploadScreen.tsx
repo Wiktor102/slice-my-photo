@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { megapixels } from '../lib/imageUtils'
 import type { Unit } from '../types'
+import { ProjectImportButton } from './ProjectImportButton'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp'
 
@@ -112,6 +113,10 @@ export function UploadScreen() {
         >
           Continue to Editor →
         </button>
+        <div className="upload-project-import">
+          <span className="hint">Already have a .smp project?</span>
+          <ProjectImportButton />
+        </div>
       </div>
     </div>
   )

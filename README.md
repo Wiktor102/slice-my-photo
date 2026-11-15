@@ -14,6 +14,7 @@
 - Otwórz podgląd tylko do odczytu z numerami paneli, aby obejrzeć gotowy układ bez przypadkowych zmian.
 - Pobierz ZIP z osobnymi plikami JPEG lub PNG. Dołącz wizualizację ściany oraz arkusz PDF z wymiarami paneli, obszarów obrazu, odstępów i szerokościami krawędzi poszczególnych ramek. Eksport celuje w 300 DPI, a aplikacja ostrzega o niższym efektywnym DPI i ogranicza rozmiar pliku do rozdzielczości zdjęcia.
 - Zapisuj układy w tej przeglądarce, wczytuj je później i cofaj lub ponawiaj zmiany.
+- Eksportuj cały projekt do pliku `.smp` razem ze zdjęciem, a potem importuj go na innym urządzeniu z przycisku `Import Project`.
 
 ## Szczegóły techniczne
 
@@ -37,6 +38,7 @@ English | [Polski](#slice-my-photo)
 - Open a read-only preview with numbered panels to inspect the finished arrangement without accidental edits.
 - Download a ZIP with separate JPEG or PNG files. Add a full-wall visualization and a measurements PDF with panel dimensions, image areas, gaps, and the resolved frame-edge width for each panel. Export targets 300 DPI, flags lower effective DPI, and caps file dimensions at the source image resolution.
 - Save layouts in this browser, load them later, and undo or redo changes.
+- Export a complete `.smp` project with its source image, then import it on another device with the `Import Project` button.
 
 ## Technical details
 

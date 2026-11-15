@@ -18,6 +18,7 @@ import { boundingBox, clampOuterPosition, clampPanelToWall, defaultPan, imageSca
 import { defaultPassepartout, legacyPassepartout, normalizePassepartout, rotatePassepartout } from '../lib/passepartout'
 import { buildImageBlobs, buildSourceImage, isPersistable, megapixels, readImageDimensions } from '../lib/imageUtils'
 import { idbSetImage, idbClearImage } from '../lib/idb'
+import type { PortableProject } from '../lib/portableProject'
 import {
   CANONICAL_MEASUREMENT_VERSION,
   migrateFrame,
@@ -116,6 +117,7 @@ interface State {
   setLoadLayoutOpen: (o: boolean) => void
   showToast: (msg: string) => void
   loadLayout: (layout: SavedLayout) => void
+  restorePortableProject: (project: PortableProject) => void
 
   undo: () => void
   redo: () => void
@@ -798,6 +800,60 @@ export const useStore = create<State>()(
           return
         }
         flushHistoryGroup()
+      },
+
+      restorePortableProject: (project) => {
+        // A source image is intentionally outside project history. Treat an
+        // imported project as a new history root so undo cannot pair the new
+        // image with layout snapshots created for the previous image.
+        historyPast.length = 0
+        historyFuture.length = 0
+        historyGroup = null
+        const panels = project.state.panels.map((panel) => ({
+          ...panel,
+          passepartout: normalizePassepartout(panel, project.state.frame),
+        }))
+        const perPanelFrame = Object.fromEntries(
+          Object.entries(project.state.perPanelFrame).map(([id, perPanel]) => {
+            const panel = panels.find((candidate) => candidate.id === id)
+            if (!panel) return [id, { ...perPanel, passepartout: { ...perPanel.passepartout } }]
+            const overridePanel = { ...panel, passepartout: { ...perPanel.passepartout } }
+            return [id, { ...perPanel, passepartout: normalizePassepartout(overridePanel, perPanel) }]
+          }),
+        )
+        const previous = get()
+        rawSet({
+          screen: 'editor',
+          sourceImage: { ...project.sourceImage },
+          imageLoading: false,
+          imageWarning: null,
+          unit: project.state.unit,
+          measurementVersion: project.state.measurementVersion,
+          wall: { ...project.state.wall },
+          panels,
+          selectedId: null,
+          imageSelected: false,
+          perPanelFrame,
+          frame: { ...project.state.frame },
+          image: { ...project.state.image },
+          presetActive: project.state.presetActive,
+          gap: project.state.gap,
+          currentSizeKey: project.state.currentSizeKey,
+          showGrid: project.state.showGrid,
+          gapSnapEnabled: project.state.gapSnapEnabled,
+          viewport: { x: 0, y: 0, scale: 3 },
+          preview: false,
+          exportOpen: false,
+          confirmReset: false,
+          homeOpen: false,
+          saveLayoutOpen: false,
+          loadLayoutOpen: false,
+          toast: null,
+          zoomToFitToken: previous.zoomToFitToken + 1,
+          zoomToImageToken: previous.zoomToImageToken,
+          canUndo: false,
+          canRedo: false,
+        })
       },
 
       resetProject: () =>
