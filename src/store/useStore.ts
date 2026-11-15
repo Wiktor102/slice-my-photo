@@ -9,6 +9,7 @@ import type {
   SavedLayout,
   SourceImage,
   Unit,
+  VariantSnapshot,
   Viewport,
   WallSetup,
 } from '../types'
@@ -116,6 +117,7 @@ interface State {
   setLoadLayoutOpen: (o: boolean) => void
   showToast: (msg: string) => void
   loadLayout: (layout: SavedLayout) => void
+  loadVariant: (variant: VariantSnapshot) => void
 
   undo: () => void
   redo: () => void
@@ -798,6 +800,32 @@ export const useStore = create<State>()(
           return
         }
         flushHistoryGroup()
+      },
+
+      loadVariant: (variant) => {
+        const nextFrame = { ...variant.frame }
+        const nextPerPanelFrame = Object.fromEntries(
+          Object.entries(variant.perPanelFrame).map(([id, panelFrame]) => [id, {
+            ...panelFrame,
+            passepartout: { ...panelFrame.passepartout },
+          }]),
+        )
+        const nextPanels = variant.panels
+          .map((panel) => ({ ...panel, passepartout: normalizePassepartout(panel, nextFrame) }))
+        set({
+          measurementVersion: CANONICAL_MEASUREMENT_VERSION,
+          unit: variant.unit,
+          wall: { ...variant.wall },
+          panels: clampPanelsToWall(nextPanels, nextFrame, nextPerPanelFrame, variant.wall),
+          frame: nextFrame,
+          perPanelFrame: nextPerPanelFrame,
+          image: { ...variant.image },
+          gap: variant.gap,
+          currentSizeKey: variant.currentSizeKey,
+          presetActive: variant.presetActive,
+          selectedId: null,
+          imageSelected: false,
+        })
       },
 
       resetProject: () =>

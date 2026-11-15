@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { TopBar } from './TopBar'
 import { LeftSidebar } from './LeftSidebar'
@@ -10,6 +10,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { SaveLayoutModal } from './SaveLayoutModal'
 import { LoadLayoutModal } from './LoadLayoutModal'
 import { Toast } from './Toast'
+import { VariantModal } from './VariantModal'
 
 const LazyExportModal = lazy(() => import('./ExportModal').then(({ ExportModal: Modal }) => ({ default: Modal })))
 
@@ -22,6 +23,7 @@ function ExportModal() {
 }
 
 export function Editor() {
+  const [variantsOpen, setVariantsOpen] = useState(false)
   const preview = useStore((s) => s.preview)
   const exportOpen = useStore((s) => s.exportOpen)
   const confirmReset = useStore((s) => s.confirmReset)
@@ -40,7 +42,7 @@ export function Editor() {
   return (
     <>
       <div className="editor">
-        <TopBar />
+        <TopBar onOpenVariants={() => setVariantsOpen(true)} />
         <LeftSidebar />
         <WallCanvas />
         <RightSidebar />
@@ -50,6 +52,7 @@ export function Editor() {
       {exportOpen && <ExportModal />}
       {saveLayoutOpen && <SaveLayoutModal />}
       {loadLayoutOpen && <LoadLayoutModal />}
+      {variantsOpen && <VariantModal onClose={() => setVariantsOpen(false)} />}
       <Toast />
       <ConfirmDialog
         open={confirmReset}
