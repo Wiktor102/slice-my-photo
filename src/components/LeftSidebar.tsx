@@ -9,6 +9,7 @@ import { formatMeasurement, fromMm, toMm } from '../lib/units'
 export function LeftSidebar() {
   const unit = useStore((s) => s.unit)
   const panels = useStore((s) => s.panels)
+  const selectedId = useStore((s) => s.selectedId)
   const selectedIds = useStore((s) => s.selectedIds)
   const presetActive = useStore((s) => s.presetActive)
   const gap = useStore((s) => s.gap)
@@ -81,12 +82,24 @@ export function LeftSidebar() {
                 <div
                   key={p.id}
                   className={`panel-row ${selectedIds.includes(p.id) ? 'selected' : ''}`}
-                  onClick={(event) => selectPanel(p.id, event.shiftKey || event.ctrlKey || event.metaKey)}
-                  aria-pressed={selectedIds.includes(p.id)}
                 >
-                  <span className="num">{i + 1}</span>
-                  <span className="size">{sizeLabel} {panelUnit}</span>
-                  {overlap && <span className="warn-dot" title="Overlaps another panel">⚠</span>}
+                  <input
+                    className="panel-selection-toggle"
+                    type="checkbox"
+                    aria-label={`Include panel ${i + 1} in selection`}
+                    checked={selectedIds.includes(p.id)}
+                    onChange={() => selectPanel(p.id, true)}
+                  />
+                  <button
+                    className="panel-select"
+                    aria-label={`Select panel ${i + 1}, ${sizeLabel} ${panelUnit}${selectedId === p.id ? ', primary' : ''}`}
+                    aria-pressed={selectedIds.includes(p.id)}
+                    onClick={(event) => selectPanel(p.id, event.shiftKey || event.ctrlKey || event.metaKey)}
+                  >
+                    <span className="num">{i + 1}</span>
+                    <span className="size">{sizeLabel} {panelUnit}</span>
+                    {overlap && <span className="warn-dot" title="Overlaps another panel">⚠</span>}
+                  </button>
                   <button
                     className="del"
                     title="Delete panel"

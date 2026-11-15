@@ -158,6 +158,54 @@ try {
     assert(state.selectedId === state.selectedIds.at(-1), 'primary selection is not the last toggled panel')
   })
 
+  await step('keyboard selection, modifier toggles, and shortcut guards', async () => {
+    const buttons = page.locator('.panel-select')
+    await buttons.nth(0).focus()
+    await page.keyboard.press('Enter')
+    let state = await readState()
+    assert(state.selectedIds.length === 1 && state.selectedId === state.panels[0].id, 'Enter did not select the focused panel')
+    await buttons.nth(1).click({ modifiers: ['Meta'] })
+    state = await readState()
+    assert(state.selectedIds.length === 2 && state.selectedId === state.panels[1].id, 'Cmd-click did not add a primary selection')
+    await buttons.nth(0).click({ modifiers: ['Control'] })
+    state = await readState()
+    assert(state.selectedIds.length === 1 && state.selectedId === state.panels[1].id, 'removing a secondary selection changed the primary')
+    const before = panelPositions(state)
+    await page.keyboard.press('Shift+ArrowDown')
+    state = await readState()
+    assert(closeEnough(state.panels[1].y - before[state.panels[1].id][1], 100), 'focused panel button did not nudge by 100mm')
+    const nudged = panelPositions(state)
+    await page.keyboard.press('Control+ArrowRight')
+    assert(samePositions(nudged, panelPositions(await readState())), 'Ctrl+Arrow unexpectedly nudged panels')
+    await page.getByRole('button', { name: /^Undo/ }).click()
+    await buttons.nth(0).click()
+    await buttons.nth(1).click({ modifiers: ['Shift'] })
+    await buttons.nth(2).click({ modifiers: ['Control'] })
+  })
+
+  await step('group snaps to an unselected panel without changing spacing', async () => {
+    const rows = page.locator('.panel-select')
+    await rows.nth(0).click()
+    await rows.nth(1).click({ modifiers: ['Shift'] })
+    const before = await readState()
+    const canvasBox = await page.locator('.main-area canvas').boundingBox()
+    const anchor = before.panels[0]
+    const startX = canvasBox.x + (anchor.x + anchor.width / 2 - before.viewport.x) * before.viewport.scale
+    const startY = canvasBox.y + (anchor.y + anchor.height / 2 - before.viewport.y) * before.viewport.scale
+    await page.mouse.move(startX, startY)
+    await page.mouse.down()
+    await page.mouse.move(startX + 25, startY + 4, { steps: 8 })
+    await page.mouse.up()
+    const after = await readState()
+    assert(after.selectedIds.length === 2, 'snap drag changed selection')
+    assert(closeEnough(after.panels[0].y, before.panels[2].y), 'group anchor did not snap vertically to the unselected panel')
+    assert(closeEnough(after.panels[1].x - after.panels[0].x, before.panels[1].x - before.panels[0].x), 'snap changed horizontal group spacing')
+    assert(closeEnough(after.panels[1].y - after.panels[0].y, before.panels[1].y - before.panels[0].y), 'snap changed vertical group spacing')
+    assert(closeEnough(after.panels[2].x, before.panels[2].x) && closeEnough(after.panels[2].y, before.panels[2].y), 'snap moved the unselected panel')
+    await page.getByRole('button', { name: /^Undo/ }).click()
+    await rows.nth(2).click({ modifiers: ['Shift'] })
+  })
+
   let stateBeforeDrag
   let stateAfterDrag
   await step('group drag clamps at wall edge and renders there', async () => {
@@ -276,8 +324,11 @@ try {
     await page.waitForSelector('.modal-overlay')
     await focusBody()
     await page.keyboard.press('Delete')
+    await page.keyboard.press('Control+z')
     const behindReset = await readState()
     assert(behindReset.panels.length === beforeReset.panels.length, 'Delete mutated panels behind Reset modal')
+    assert(samePositions(panelPositions(beforeReset), panelPositions(behindReset)), 'Undo mutated panels behind Reset modal')
+    assert(JSON.stringify(beforeReset.panels) === JSON.stringify(behindReset.panels), 'Undo changed panel styles behind Reset modal')
     await page.getByRole('button', { name: 'Cancel' }).click()
     await page.waitForSelector('.modal-overlay', { state: 'detached' })
 
@@ -289,6 +340,34 @@ try {
     assert(behindExport.panels.length === beforeReset.panels.length, 'Delete mutated panels behind Export modal')
     await page.locator('.modal .close-x').click()
     await page.waitForSelector('.modal-overlay', { state: 'detached' })
+  })
+
+  await step('save, load, and home dialogs guard layout shortcuts', async () => {
+    for (const name of ['Save Layout', 'Load Layout', 'Home']) {
+      const before = await readState()
+      await page.locator('.topbar').getByRole('button', { name, exact: true }).click()
+      await page.waitForSelector('.modal-overlay')
+      await focusBody()
+      for (const key of ['ArrowDown', 'Backspace', 'Control+z', 'Control+Shift+z']) await page.keyboard.press(key)
+      const after = await readState()
+      assert(JSON.stringify(after.panels) === JSON.stringify(before.panels), `${name} allowed a layout shortcut behind its dialog`)
+      assert(JSON.stringify(after.selectedIds) === JSON.stringify(before.selectedIds), `${name} changed selection behind its dialog`)
+      if (name === 'Home') await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+      else await page.locator('.modal .close-x').click()
+      await page.waitForSelector('.modal-overlay', { state: 'detached' })
+    }
+  })
+
+  await step('responsive layout retains accessible selection controls', async () => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const width = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: innerWidth }))
+    assert(width.scroll <= width.viewport, `mobile horizontal overflow: ${width.scroll} > ${width.viewport}`)
+    await page.locator('.panel-select').first().focus()
+    await page.keyboard.press('Enter')
+    assert(await page.locator('.panel-select[aria-pressed="true"]').count() === 1, 'mobile keyboard selection failed')
+    await page.getByRole('checkbox', { name: 'Include panel 2 in selection' }).check()
+    assert(await page.locator('.panel-select[aria-pressed="true"]').count() === 2, 'mobile checkbox did not add a selection')
+    await page.setViewportSize({ width: 1440, height: 900 })
   })
 
   await step('inch nudge', async () => {

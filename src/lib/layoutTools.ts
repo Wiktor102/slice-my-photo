@@ -126,15 +126,7 @@ export function centerRectsOnWall(
 ): LayoutPosition[] {
   const box = bounds(rects)
   if (!box) return []
-  const dx = wallWidth / 2 - (box.x + box.w / 2)
-  const dy = wallHeight / 2 - (box.y + box.h / 2)
-  const minDx = box.w <= wallWidth ? -box.x : -box.x
-  const maxDx = box.w <= wallWidth ? wallWidth - box.x - box.w : -box.x
-  const minDy = box.h <= wallHeight ? -box.y : -box.y
-  const maxDy = box.h <= wallHeight ? wallHeight - box.y - box.h : -box.y
-  const safeDx = Math.max(minDx, Math.min(dx, maxDx))
-  const safeDy = Math.max(minDy, Math.min(dy, maxDy))
-  return rects.map((rect) => position(rect, rect.x + safeDx, rect.y + safeDy, wallWidth, wallHeight))
+  return translateRects(rects, wallWidth / 2 - (box.x + box.w / 2), wallHeight / 2 - (box.y + box.h / 2), wallWidth, wallHeight)
 }
 
 /** Move a group by a delta, applying one shared clamp to preserve its spacing. */
@@ -147,11 +139,11 @@ export function translateRects(
 ): LayoutPosition[] {
   const box = bounds(rects)
   if (!box) return []
-  const minDx = box.w <= wallWidth ? -box.x : -box.x
-  const maxDx = box.w <= wallWidth ? wallWidth - box.x - box.w : -box.x
-  const minDy = box.h <= wallHeight ? -box.y : -box.y
-  const maxDy = box.h <= wallHeight ? wallHeight - box.y - box.h : -box.y
-  const safeDx = Math.max(minDx, Math.min(dx, maxDx))
-  const safeDy = Math.max(minDy, Math.min(dy, maxDy))
-  return rects.map((rect) => position(rect, rect.x + safeDx, rect.y + safeDy, wallWidth, wallHeight))
+  // If a group is larger than the wall, allow it to move between its two
+  // edge anchors. Never clamp individual members and destroy their spacing.
+  const edgeDx = wallWidth - box.x - box.w
+  const edgeDy = wallHeight - box.y - box.h
+  const safeDx = Math.max(Math.min(-box.x, edgeDx), Math.min(dx, Math.max(-box.x, edgeDx)))
+  const safeDy = Math.max(Math.min(-box.y, edgeDy), Math.min(dy, Math.max(-box.y, edgeDy)))
+  return rects.map((rect) => ({ id: rect.id, x: rect.x + safeDx, y: rect.y + safeDy }))
 }

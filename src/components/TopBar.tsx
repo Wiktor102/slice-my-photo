@@ -30,6 +30,7 @@ export function TopBar() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || isEditableTarget(event.target)) return
+      if (event.defaultPrevented || document.querySelector('.modal-overlay, .compare-overlay, [role="dialog"]')) return
       const key = event.key.toLowerCase()
       if (key === 'z') {
         event.preventDefault()

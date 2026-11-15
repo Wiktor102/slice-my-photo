@@ -54,7 +54,10 @@ export function PanelNode({
     const currentSelectedIds = useStore.getState().selectedIds
     // Keep a multi-selection intact when the user starts dragging one of its
     // members. Modifier clicks still toggle selection as expected.
-    if (!additive && selected && currentSelectedIds.length > 1) return
+    if (!additive && selected && currentSelectedIds.length > 1) {
+      selectPanel(panel.id, false, true)
+      return
+    }
     selectPanel(panel.id, additive)
   }
 
@@ -119,6 +122,7 @@ export function PanelNode({
   }
 
   const handleDragStart = () => {
+    if (!useStore.getState().selectedIds.includes(panel.id)) selectPanel(panel.id)
     beginHistoryGroup()
   }
 
@@ -182,6 +186,7 @@ export function PanelNode({
         y={outer.y}
         draggable={interactive}
         onMouseDown={interactive ? handleSelect : undefined}
+        onTouchStart={interactive ? () => selectPanel(panel.id, false, true) : undefined}
         onDragStart={interactive ? handleDragStart : undefined}
         onDragMove={interactive ? handleDragMove : undefined}
         onDragEnd={interactive ? handleDragEnd : undefined}

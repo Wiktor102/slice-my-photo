@@ -75,27 +75,27 @@ export function RightSidebar() {
         <div className="card layout-tools">
           <div className="section-title">Layout Tools</div>
           <div className="hint layout-selection-hint">
-            {selectedCount} panel{selectedCount === 1 ? '' : 's'} selected · Shift/Ctrl/Cmd-click to add
+            {selectedCount} panel{selectedCount === 1 ? '' : 's'} selected · Use checkboxes or Shift/Ctrl/Cmd-click to toggle
           </div>
           <div className="layout-tool-row">
-            <button onClick={duplicateSelectedPanels} disabled={panels.length >= 8} title="Duplicate selected panels with a small offset">Duplicate</button>
+            <button onClick={duplicateSelectedPanels} disabled={panels.length + selectedCount > 8} title={panels.length + selectedCount > 8 ? 'Not enough room to duplicate the selection (maximum 8 panels)' : 'Duplicate selected panels with a small offset'}>Duplicate</button>
             <button onClick={centerSelectedPanels} title="Center the selected group on the wall">Center on wall</button>
           </div>
           <div className="layout-tool-group">
-            <span>Horizontal</span>
-            <div className="layout-tool-row">
-              <button onClick={() => alignSelectedPanels('horizontal', 'start')} title="Align selected frames by their left edges">Left</button>
-              <button onClick={() => alignSelectedPanels('horizontal', 'center')} title="Align selected frame centers horizontally">Center</button>
-              <button onClick={() => alignSelectedPanels('horizontal', 'end')} title="Align selected frames by their right edges">Right</button>
+            <span id="horizontal-layout-label">Horizontal</span>
+            <div className="layout-tool-row" role="group" aria-labelledby="horizontal-layout-label">
+              <button disabled={selectedCount < 2} onClick={() => alignSelectedPanels('horizontal', 'start')} title="Align selected frames by their left edges">Left</button>
+              <button disabled={selectedCount < 2} onClick={() => alignSelectedPanels('horizontal', 'center')} title="Align selected frame centers horizontally">Center</button>
+              <button disabled={selectedCount < 2} onClick={() => alignSelectedPanels('horizontal', 'end')} title="Align selected frames by their right edges">Right</button>
               <button onClick={() => distributeSelectedPanels('horizontal')} disabled={selectedCount < 3} title="Distribute selected frames evenly from left to right">Distribute</button>
             </div>
           </div>
           <div className="layout-tool-group">
-            <span>Vertical</span>
-            <div className="layout-tool-row">
-              <button onClick={() => alignSelectedPanels('vertical', 'start')} title="Align selected frames by their top edges">Top</button>
-              <button onClick={() => alignSelectedPanels('vertical', 'center')} title="Align selected frame centers vertically">Middle</button>
-              <button onClick={() => alignSelectedPanels('vertical', 'end')} title="Align selected frames by their bottom edges">Bottom</button>
+            <span id="vertical-layout-label">Vertical</span>
+            <div className="layout-tool-row" role="group" aria-labelledby="vertical-layout-label">
+              <button disabled={selectedCount < 2} onClick={() => alignSelectedPanels('vertical', 'start')} title="Align selected frames by their top edges">Top</button>
+              <button disabled={selectedCount < 2} onClick={() => alignSelectedPanels('vertical', 'center')} title="Align selected frame centers vertically">Middle</button>
+              <button disabled={selectedCount < 2} onClick={() => alignSelectedPanels('vertical', 'end')} title="Align selected frames by their bottom edges">Bottom</button>
               <button onClick={() => distributeSelectedPanels('vertical')} disabled={selectedCount < 3} title="Distribute selected frames evenly from top to bottom">Distribute</button>
             </div>
           </div>
@@ -105,7 +105,7 @@ export function RightSidebar() {
 
       {selected && selFrame && selGeom && (
         <div className="card">
-          <div className="section-title">Panel Properties</div>
+          <div className="section-title">Panel {panels.findIndex((panel) => panel.id === selectedId) + 1} Properties</div>
           <label className="field">
             <span>Panel units</span>
             <select

@@ -41,9 +41,9 @@ export function Editor() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || preview || imageSelected || selectedIds.length === 0) return
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || preview || imageSelected || selectedIds.length === 0) return
       const target = event.target instanceof HTMLElement ? event.target : null
-      if (target?.closest('input, textarea, select, button, .modal-overlay, .compare-overlay, [role="dialog"]') || target?.isContentEditable) return
+      if (target?.closest('input, textarea, select, button:not(.panel-select), .modal-overlay, .compare-overlay, [role="dialog"]') || target?.isContentEditable) return
       if (exportOpen || confirmReset || homeOpen || saveLayoutOpen || loadLayoutOpen || document.querySelector('.modal-overlay, .compare-overlay, [role="dialog"]')) return
       const del = event.key === 'Delete' || event.key === 'Backspace'
       if (del) {
