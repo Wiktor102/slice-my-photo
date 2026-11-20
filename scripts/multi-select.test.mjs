@@ -370,6 +370,28 @@ try {
     await page.setViewportSize({ width: 1440, height: 900 })
   })
 
+  await step('returning home clears the previous project history', async () => {
+    const undo = page.getByRole('button', { name: /^Undo/ })
+    const redo = page.getByRole('button', { name: /^Redo/ })
+    await undo.click()
+    assert(await undo.isEnabled() && await redo.isEnabled(), 'the first project needs both undo and redo history')
+
+    await page.locator('.topbar').getByRole('button', { name: 'Home' }).click()
+    await page.getByRole('button', { name: 'Go home' }).click()
+    await page.waitForSelector('.upload-card')
+    await page.setInputFiles('input[type=file]', { name: 'second-project.png', mimeType: 'image/png', buffer: makePng(300, 500) })
+    await page.getByRole('button', { name: /Continue to Editor/ }).click()
+    await page.waitForSelector('.editor')
+    assert(await undo.isDisabled() && await redo.isDisabled(), 'a new project exposes history from the previous image')
+
+    await focusBody()
+    for (const key of ['Control+z', 'Control+Shift+z']) {
+      await page.keyboard.press(key)
+      const state = await readState()
+      assert(state.panels.length === 0 && state.selectedIds.length === 0 && state.selectedId === null, `${key} restored the previous project's layout`)
+    }
+  })
+
   await step('inch nudge', async () => {
     await page.locator('.topbar').getByRole('button', { name: 'Home' }).click()
     await page.getByRole('button', { name: 'Go home' }).click()

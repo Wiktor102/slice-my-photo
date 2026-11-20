@@ -420,12 +420,16 @@ export const useStore = create<State>()(
 
       clearImage: async () => {
         await idbClearImage()
-        // Returning home clears the project as well as the image. Since the
-        // image itself is not undoable, keep this navigation/reset atomic and
-        // out of the project history instead of creating an unusable entry.
+        // The next image starts a new project. Snapshots from this project
+        // cannot be restored with their original source image.
+        historyPast.length = 0
+        historyFuture.length = 0
+        historyGroup = null
         rawSet({
           sourceImage: null,
           screen: 'upload',
+          canUndo: false,
+          canRedo: false,
           panels: [],
           selectedId: null,
           selectedIds: [],
