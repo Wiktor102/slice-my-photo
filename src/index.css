@@ -647,6 +647,28 @@ button.big { padding: 10px 16px; font-size: 15px; }
   font-size: 11px;
   flex-shrink: 0;
 }
+.panel-selection-toggle {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.panel-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: inherit;
+}
+.panel-select:hover { background: transparent; }
+.panel-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .panel-row .size { flex: 1; }
 .panel-row .warn-dot {
   color: var(--warn);
@@ -668,6 +690,39 @@ button.big { padding: 10px 16px; font-size: 15px; }
   display: block;
 }
 .panel-row .del:hover { color: var(--danger); }
+
+.layout-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.layout-selection-hint,
+.layout-key-hint {
+  line-height: 1.35;
+}
+.layout-tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.layout-tool-row button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+.layout-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 2px;
+}
+.layout-tool-group > span {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
 .empty-hint {
   color: var(--text-dim);
