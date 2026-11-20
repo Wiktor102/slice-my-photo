@@ -255,6 +255,7 @@ export function PanelNode({
           stroke="#4a7dff"
           strokeWidth={1.5 / viewportScale}
           dash={[6 / viewportScale, 4 / viewportScale]}
+          opacity={transformable ? 1 : 0.5}
           listening={false}
         />
       )}

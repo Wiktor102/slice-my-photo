@@ -3,7 +3,8 @@ import { Layer, Line, Rect, Stage, Text, Image as KonvaImage, Group } from 'reac
 import type Konva from 'konva'
 import { useStore, useImagePlacement } from '../store/useStore'
 import { loadImage } from '../lib/imageUtils'
-import { resolveFrame } from '../lib/geometry'
+import { panelGeometry, resolveFrame } from '../lib/geometry'
+import { rectBounds } from '../lib/layoutTools'
 import { PanelNode } from './PanelNode'
 import type { SnapLines } from '../types'
 import {
@@ -87,6 +88,11 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
 
   const isPreview = forPreview || preview
   const scale = viewport.scale
+  const groupBounds = !isPreview && selectedIds.length > 1
+    ? rectBounds(panels
+      .filter((panel) => selectedIds.includes(panel.id))
+      .map((panel) => panelGeometry(panel, resolveFrame(panel, frame, perPanelFrame)).outer))
+    : null
 
   useLayoutEffect(() => {
     if (!tip || !tipRef.current) return
@@ -465,7 +471,7 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   panel={p}
                   frame={resolveFrame(p, frame, perPanelFrame)}
                   selected={!isPreview && selectedIds.includes(p.id)}
-                  transformable={!isPreview && selectedId === p.id}
+                  transformable={!isPreview && selectedIds.length === 1 && selectedId === p.id}
                   image={imageEl}
                   sourceImage={sourceImage}
                   scale={placement.scale}
@@ -480,6 +486,18 @@ export function WallCanvas({ forPreview = false }: { forPreview?: boolean }) {
                   setTip={setTip}
                 />
               ))}
+
+            {groupBounds && (
+              <Rect
+                x={groupBounds.x}
+                y={groupBounds.y}
+                width={groupBounds.w}
+                height={groupBounds.h}
+                stroke="#4a7dff"
+                strokeWidth={2 / scale}
+                listening={false}
+              />
+            )}
 
             {/* selection border + corner handles for proportional scaling of the ghost image */}
             {imageSelected && !isPreview && panels.length > 0 && sourceImage && ghostW > 0 && (

@@ -34,7 +34,7 @@ export function clampOuterPosition(
   }
 }
 
-function bounds(rects: LayoutRect[]): Rect | null {
+export function rectBounds(rects: Rect[]): Rect | null {
   if (rects.length === 0) return null
   let minX = Infinity
   let minY = Infinity
@@ -62,7 +62,7 @@ export function alignRects(
   wallWidth: number,
   wallHeight: number,
 ): LayoutPosition[] {
-  const box = bounds(rects)
+  const box = rectBounds(rects)
   if (!box) return []
   if (axis === 'horizontal') {
     const target = alignment === 'start'
@@ -124,7 +124,7 @@ export function centerRectsOnWall(
   wallWidth: number,
   wallHeight: number,
 ): LayoutPosition[] {
-  const box = bounds(rects)
+  const box = rectBounds(rects)
   if (!box) return []
   return translateRects(rects, wallWidth / 2 - (box.x + box.w / 2), wallHeight / 2 - (box.y + box.h / 2), wallWidth, wallHeight)
 }
@@ -137,7 +137,7 @@ export function translateRects(
   wallWidth: number,
   wallHeight: number,
 ): LayoutPosition[] {
-  const box = bounds(rects)
+  const box = rectBounds(rects)
   if (!box) return []
   // If a group is larger than the wall, allow it to move between its two
   // edge anchors. Never clamp individual members and destroy their spacing.

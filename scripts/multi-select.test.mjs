@@ -121,6 +121,42 @@ try {
     document.body.focus()
   })
 
+  // Sample the triptych's outer frame edges and the gaps between them. The
+  // gaps distinguish a group border from three separate panel borders.
+  const selectionMarks = async () => {
+    const state = await readState()
+    return page.locator('.main-area canvas').evaluate((canvas, { panels, frame, viewport, selectedId }) => {
+      const context = canvas.getContext('2d')
+      const { width, height } = canvas.getBoundingClientRect()
+      const pixelScaleX = canvas.width / width
+      const pixelScaleY = canvas.height / height
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+      const hasColorNear = (x, y, matches) => {
+        const px = Math.round((x - viewport.x) * viewport.scale * pixelScaleX)
+        const py = Math.round((y - viewport.y) * viewport.scale * pixelScaleY)
+        for (let row = Math.max(0, py - 2); row <= Math.min(canvas.height - 1, py + 2); row++) {
+          for (let col = Math.max(0, px - 2); col <= Math.min(canvas.width - 1, px + 2); col++) {
+            const offset = (row * canvas.width + col) * 4
+            if (matches(pixels[offset], pixels[offset + 1], pixels[offset + 2])) return true
+          }
+        }
+        return false
+      }
+      const [left, middle, right] = panels
+      const primary = panels.find((panel) => panel.id === selectedId)
+      const top = left.y - frame.edgeWidth
+      const gapCenter = (first, second) => (first.x + first.width + second.x) / 2
+      const blue = (r, g, b) => r < 95 && g > 100 && g < 150 && b > 225
+      return {
+        leftGap: hasColorNear(gapCenter(left, middle), top, blue),
+        rightGap: hasColorNear(gapCenter(middle, right), top, blue),
+        primaryHandle: Boolean(primary && hasColorNear(
+          primary.x - frame.edgeWidth, primary.y - frame.edgeWidth, (r, g, b) => r > 245 && g > 245 && b > 245,
+        )),
+      }
+    }, state)
+  }
+
   const uploadTriptych = async () => {
     await page.waitForSelector('.upload-card', { timeout: 10000 })
     await page.setInputFiles('input[type=file]', { name: 'multi-select-test.png', mimeType: 'image/png', buffer: image })
@@ -183,6 +219,29 @@ try {
     await buttons.nth(2).click({ modifiers: ['Control'] })
   })
 
+  await step('selection outline spans the selected panels and hides in preview', async () => {
+    const buttons = page.locator('.panel-select')
+    let marks = await selectionMarks()
+    assert(marks.leftGap && marks.rightGap && !marks.primaryHandle, 'three selected panels do not have one outline without resize handles')
+    await buttons.nth(2).click({ modifiers: ['Shift'] })
+    marks = await selectionMarks()
+    assert(marks.leftGap && !marks.rightGap, 'outline did not shrink to the two remaining panels')
+    await buttons.nth(1).click()
+    marks = await selectionMarks()
+    assert(!marks.leftGap && !marks.rightGap && marks.primaryHandle, 'single selection did not restore its resize handles')
+    await buttons.nth(0).click({ modifiers: ['Shift'] })
+    await buttons.nth(2).click({ modifiers: ['Shift'] })
+
+    await page.getByRole('button', { name: 'Preview', exact: true }).click()
+    const back = page.getByRole('button', { name: '← Back to Editor' })
+    await back.waitFor()
+    marks = await selectionMarks()
+    assert(!marks.leftGap && !marks.rightGap, 'group outline leaked into the print preview')
+    await back.click()
+    marks = await selectionMarks()
+    assert(marks.leftGap && marks.rightGap, 'group outline did not return after leaving preview')
+  })
+
   await step('group snaps to an unselected panel without changing spacing', async () => {
     const rows = page.locator('.panel-select')
     await rows.nth(0).click()
@@ -231,6 +290,8 @@ try {
     assert(deltas.every(([x, y]) => closeEnough(x, deltas[0][0]) && closeEnough(y, deltas[0][1])), 'group drag did not preserve panel spacing')
     const rightEdge = Math.max(...afterOuter.map((outer) => outer.x + outer.w))
     assert(closeEnough(rightEdge, stateAfterDrag.wall.width, 0.1), `group drag stopped at ${rightEdge}mm instead of wall edge ${stateAfterDrag.wall.width}mm`)
+    const marks = await selectionMarks()
+    assert(marks.leftGap && marks.rightGap && !marks.primaryHandle, 'selection outline did not follow the dragged group to the wall edge')
 
     const rendered = await page.evaluate(({ panels, viewport, canvasBox }) => {
       const canvas = document.querySelector('.main-area canvas')

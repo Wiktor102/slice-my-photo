@@ -1,6 +1,6 @@
 # Multi-selection
 
-Panel checkboxes toggle membership on touch, with a mouse, or with the keyboard. Shift-, Ctrl-, and Cmd-click also toggle membership. Clicking a panel name selects it alone. Clicking or dragging a selected canvas panel makes it primary while retaining the group. The primary panel supplies the property editor and individual resize handles; property and style edits still affect that panel, or all panels when global styling is active.
+Panel checkboxes toggle membership on touch, with a mouse, or with the keyboard. Shift-, Ctrl-, and Cmd-click also toggle membership. Clicking a panel name selects it alone. Clicking or dragging a selected canvas panel makes it primary while retaining the group. One outline encloses the full group. Resize handles appear when a single panel is selected. The property editor still follows the primary panel, and global style edits apply to all panels.
 
 Layout commands use resolved outer frame bounds. Dragging, nudging, centering, and duplication preserve group spacing. A group that cannot fit the wall keeps its spacing and may extend beyond the wall, where preflight reports it. Duplication copies the whole selection only when all copies fit within the eight-panel limit. Copies have independent frame and passepartout objects.
 
